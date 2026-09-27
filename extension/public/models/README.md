@@ -54,9 +54,28 @@ This directory contains the compiled, standalone ONNX neural network models exec
 
 ---
 
+## 4. Microsoft OmniParser v2.0 UI Icon Detector (`omniparser_icon_detect.onnx`)
+
+- **Model Type:** UI Element & Screen Icon Detection Network (YOLOv8/11 Fine-Tuned for GUI Widgets)
+- **File Size:** 80,428,880 bytes (~76.7 MB, Slimmed ONNX)
+- **Origin / Upstream Repository:** Hugging Face Hub (`microsoft/OmniParser-v2.0`)
+- **Direct Upstream URL:** `https://huggingface.co/microsoft/OmniParser-v2.0/resolve/main/icon_detect/model.pt`
+- **License:** MIT License (Permissive Open-Source)
+- **Input Specification:**
+  - Input Name: `'images'`
+  - Tensor: `Float32Array[1, 3, 640, 640]` normalized to $[0.0, 1.0]$ ($\frac{pixel}{255.0}$)
+- **Output Specification:**
+  - Output Name: `'output0'`
+  - Tensor Shape: `Float32Array[1, 5, 8400]` (8,400 anchor predictions: $[cx, cy, w, h, icon\_confidence]$)
+- **Post-Processing:** IoU Non-Maximum Suppression (NMS threshold = 0.35, confidence $\ge 0.25$)
+- **Role in SentryAgent:** Detects interactable UI icons, buttons, search bars, and controls on opaque `<canvas>` dashboards (e.g. ISRO satellite telemetry) and unlabeled icon buttons.
+
+---
+
 ## Benchmark Performance
 - **BlazeFace Execution Time:** ~2.1 ms (WebGPU) / ~4.8 ms (WASM SIMD)
 - **DBNet Execution Time:** ~6.9 ms (WebGPU) / ~14.2 ms (WASM SIMD)
+- **OmniParser Icon Detect Time:** ~28 ms (WebGPU) / ~45 ms (WASM SIMD)
 - **YOLOS-ViT (q4) Execution Time:** ~18.5 ms (WebGPU)
-- **Combined Perception Footprint:** **~12.7 MB** total model weight footprint on disk
+- **Perception Architecture:** 100% on-device, zero-cloud egress, pure in-browser execution.
 
