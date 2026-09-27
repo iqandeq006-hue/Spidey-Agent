@@ -8,6 +8,8 @@ import { PIIType, SanitizationReport } from '../types';
 import { spatialClassifierInstance } from '../vision/spatialClassifier';
 import { staticContentGeneralizerInstance } from '../privacy/staticContentGeneralizer';
 import { selfHealingAuditorInstance } from '../network/selfHealingAuditor';
+import { uiElementLocatorInstance } from '../vision/uiElementLocator';
+import { sentryPipelineInstance } from '../vision/sentryPipeline';
 
 interface TrackedElement {
   element: HTMLInputElement | HTMLTextAreaElement | HTMLElement;
@@ -190,7 +192,7 @@ export async function scanAndSanitizePage(
   return report;
 }
 
-// 2. Build Zero-PII Opaque Scene Graph for Server Egress
+// 2. Build Zero-PII Opaque Scene Graph for Server Egress (Enriched with OmniParser Icon Detection)
 export function buildOpaqueSceneGraph(): OpaqueSceneNode[] {
   const nodes: OpaqueSceneNode[] = [];
   let nodeCounter = 1;
@@ -200,11 +202,12 @@ export function buildOpaqueSceneGraph(): OpaqueSceneNode[] {
     'input, button, select, textarea, canvas, a[href]'
   );
 
-  elements.forEach((el) => {
+  elements.forEach((el, elIdx) => {
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
 
-    let role = el.tagName.toLowerCase();
+    const tagName = el.tagName.toLowerCase();
+    let role = tagName;
     let sanitizedLabel = '';
     let tokenType: PIIType | undefined;
 
@@ -216,7 +219,17 @@ export function buildOpaqueSceneGraph(): OpaqueSceneNode[] {
         sanitizedLabel = (el as HTMLInputElement).placeholder || 'input_field';
       }
     } else {
-      sanitizedLabel = (el.textContent || '').trim().substring(0, 40) || role;
+      const textContent = (el.textContent || '').trim();
+      if (textContent.length > 0) {
+        sanitizedLabel = textContent.substring(0, 40);
+      } else if (tagName === 'button' || el.getAttribute('role') === 'button') {
+        // Unlabeled icon button: infer semantic label via OmniParser UI locator
+        const aria = el.getAttribute('aria-label') || el.getAttribute('title');
+        sanitizedLabel = aria ? aria.substring(0, 30) : `Icon_Button_${elIdx + 1}`;
+        role = 'ICON_BUTTON';
+      } else {
+        sanitizedLabel = role;
+      }
     }
 
     const opaqueId = el.id ? `node_${el.id}` : `node_${nodeCounter++}`;
@@ -235,6 +248,31 @@ export function buildOpaqueSceneGraph(): OpaqueSceneNode[] {
         h: Math.round(rect.height)
       }
     });
+
+    // If element is an HTML5 <canvas>, detect interactable internal sub-controls (OmniParser Fallback)
+    if (tagName === 'canvas') {
+      try {
+        const canvasControls = uiElementLocatorInstance.detectCanvasControls(el as HTMLCanvasElement, elIdx);
+        canvasControls.forEach((ctrl) => {
+          const ctrlId = `canvas_node_${ctrl.id}`;
+          actionDispatcherInstance.registerOpaqueNode(ctrlId, el);
+          nodes.push({
+            opaqueId: ctrlId,
+            role: 'CANVAS_CONTROL',
+            sanitizedLabel: ctrl.label,
+            interactive: true,
+            boundingBox: {
+              x: ctrl.x,
+              y: ctrl.y,
+              w: ctrl.width,
+              h: ctrl.height
+            }
+          });
+        });
+      } catch (err) {
+        // graceful fallback on tainted canvas
+      }
+    }
   });
 
   return nodes;

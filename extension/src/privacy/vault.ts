@@ -80,6 +80,11 @@ export class LocalInversionVault {
     return this.vault.size;
   }
 
+  // Get all raw real values (for self-healing residual leak checks)
+  public getRealValues(): string[] {
+    return Array.from(this.vault.values()).map(e => e.realValue);
+  }
+
   // Get all active entries (for popup inspection with partial masking)
   public getInspectionEntries(): Array<{ token: string; maskedReal: string; type: PIIType }> {
     const list: Array<{ token: string; maskedReal: string; type: PIIType }> = [];
