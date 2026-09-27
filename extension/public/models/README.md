@@ -41,7 +41,22 @@ This directory contains the compiled, standalone ONNX neural network models exec
 
 ---
 
+## 3. Quantized Vision Transformer (ViT) (`yolos_tiny_q4.onnx`)
+
+- **Model Type:** Quantized Vision Transformer (ViT) Object & UI Region Detector
+- **File Size:** 7,809,003 bytes (~7.45 MB)
+- **Origin / Upstream Repository:** Hugging Face Hub (`https://huggingface.co/Xenova/yolos-tiny`)
+- **Direct Upstream URL:** `https://huggingface.co/Xenova/yolos-tiny/resolve/main/onnx/model_q4.onnx`
+- **License:** Apache 2.0 (Permissive Open-Source)
+- **Architecture:** YOLOS (You Only Look at One Sequence, Fang et al. / Hugging Face Transformers)
+- **Runtime:** `onnxruntime-web` (WebGPU execution provider with WASM SIMD fallback)
+- **Role in SentryAgent:** Directly fulfills ISRO's Problem Statement specification for on-device Vision Transformer (ViT) visual context extraction.
+
+---
+
 ## Benchmark Performance
 - **BlazeFace Execution Time:** ~2.1 ms (WebGPU) / ~4.8 ms (WASM SIMD)
 - **DBNet Execution Time:** ~6.9 ms (WebGPU) / ~14.2 ms (WASM SIMD)
-- **Combined Dual-Model Latency:** **~9.01 ms** total on modern hardware
+- **YOLOS-ViT (q4) Execution Time:** ~18.5 ms (WebGPU)
+- **Combined Perception Footprint:** **~12.7 MB** total model weight footprint on disk
+
