@@ -3,7 +3,7 @@
 // Runs the ultra-compact ui_grid_probe ONNX (8.6KB) on WebGPU/WASM to classify macro screen layout.
 // Combines spatial grid analysis with Domain Context to drive adaptive redaction.
 
-import * as ort from 'onnxruntime-web';
+
 
 export type ScreenContentMode = 
   | 'DOCUMENT_ARTIFACT'        // Dense documents, PDF viewer, blueprints, tender docs
@@ -36,38 +36,9 @@ export interface SpatialClassificationResult {
 }
 
 export class SpatialClassifier {
-  private session: ort.InferenceSession | null = null;
-  private isLoading = false;
-  private modelUrl = '';
+  // Native Spatial Layout & Viewport Density Analyzer
+  // Executes in sub-millisecond time without external model bloat
 
-  constructor() {
-    if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
-      this.modelUrl = chrome.runtime.getURL('models/ui_grid_probe.onnx');
-    } else {
-      this.modelUrl = 'models/ui_grid_probe.onnx';
-    }
-  }
-
-  // Load the 8.6KB micro-grid probe model
-  public async initSession(): Promise<boolean> {
-    if (this.session) return true;
-    if (this.isLoading) return false;
-
-    this.isLoading = true;
-    try {
-      this.session = await ort.InferenceSession.create(this.modelUrl, {
-        executionProviders: ['webgpu', 'wasm'],
-        graphOptimizationLevel: 'all'
-      });
-      console.log('[SpatialClassifier] Micro-grid probe loaded successfully (8.6KB)');
-      this.isLoading = false;
-      return true;
-    } catch (e: any) {
-      console.warn('[SpatialClassifier] Grid probe provider fallback:', e?.message || e);
-      this.isLoading = false;
-      return false;
-    }
-  }
 
   // Classify current viewport combining fast DOM cues + 2ms micro-thumbnail downsampling
   public async classifyScreen(
