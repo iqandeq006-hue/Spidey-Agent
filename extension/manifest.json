@@ -20,8 +20,7 @@
     "<all_urls>"
   ],
   "action": {
-    "default_popup": "src/popup/popup.html",
-    "default_title": "SentryAgent Privacy Console"
+    "default_title": "SentryAgent Privacy Co-Pilot (Side Panel)"
   },
   "side_panel": {
     "default_path": "src/popup/popup.html"

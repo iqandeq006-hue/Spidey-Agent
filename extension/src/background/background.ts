@@ -8,6 +8,30 @@ let currentSession: AgentSessionState | null = null;
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[SentryAgent] Background Service Worker installed successfully.');
+  // Configure Side Panel to automatically open when user clicks extension icon in toolbar
+  if ((chrome as any).sidePanel?.setPanelBehavior) {
+    (chrome as any).sidePanel
+      .setPanelBehavior({ openPanelOnActionClick: true })
+      .catch((err: any) => console.error('[SentryAgent] Failed to set side panel behavior:', err));
+  }
+});
+
+// Configure side panel behavior on top-level service worker startup
+if ((chrome as any).sidePanel?.setPanelBehavior) {
+  (chrome as any).sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((err: any) => console.error('[SentryAgent] setPanelBehavior error:', err));
+}
+
+// Fallback action click listener in case setPanelBehavior is bypassed
+chrome.action?.onClicked?.addListener(async (tab) => {
+  if (tab.windowId && (chrome as any).sidePanel?.open) {
+    try {
+      await (chrome as any).sidePanel.open({ windowId: tab.windowId });
+    } catch (err) {
+      console.error('[SentryAgent] Failed to open side panel on click:', err);
+    }
+  }
 });
 
 // Restore previous session from storage if service worker wakes up
