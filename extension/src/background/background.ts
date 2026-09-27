@@ -189,4 +189,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true, message: 'Autonomous task aborted by user.' });
     return true;
   }
+
+  if (message.type === 'OPEN_SIDE_PANEL') {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const currentTab = tabs[0];
+      if (currentTab?.windowId && (chrome as any).sidePanel?.open) {
+        (chrome as any).sidePanel.open({ windowId: currentTab.windowId })
+          .then(() => sendResponse({ success: true }))
+          .catch((err: any) => sendResponse({ success: false, error: String(err) }));
+      } else {
+        sendResponse({ success: false, error: 'SidePanel API not available or tab window not found' });
+      }
+    });
+    return true;
+  }
 });

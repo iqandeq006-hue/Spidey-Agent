@@ -241,6 +241,25 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (e.key === 'Enter') runZeroAiCommand();
   });
 
+  // Spotlight HUD Trigger
+  const btnOpenSpotlight = document.getElementById('btn-open-spotlight') as HTMLButtonElement;
+  btnOpenSpotlight?.addEventListener('click', async () => {
+    const tab = await getActiveTab();
+    if (tab?.id) {
+      await ensureContentScriptLoaded(tab.id, tab.url);
+      chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SPOTLIGHT' });
+      window.close();
+    }
+  });
+
+  // Dock to Persistent Chrome Side Panel
+  const btnDockSidepanel = document.getElementById('btn-dock-sidepanel') as HTMLButtonElement;
+  btnDockSidepanel?.addEventListener('click', async () => {
+    chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }, () => {
+      window.close();
+    });
+  });
+
   function escapeHtml(str: string): string {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }

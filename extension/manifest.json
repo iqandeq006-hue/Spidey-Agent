@@ -13,7 +13,8 @@
     "scripting",
     "storage",
     "tabs",
-    "debugger"
+    "debugger",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -21,6 +22,9 @@
   "action": {
     "default_popup": "src/popup/popup.html",
     "default_title": "SentryAgent Privacy Console"
+  },
+  "side_panel": {
+    "default_path": "src/popup/popup.html"
   },
   "background": {
     "service_worker": "background.js",

@@ -11,6 +11,7 @@ import { selfHealingAuditorInstance } from '../network/selfHealingAuditor';
 import { uiElementLocatorInstance } from '../vision/uiElementLocator';
 import { sentryPipelineInstance } from '../vision/sentryPipeline';
 import { deterministicNavigatorInstance } from '../execution/deterministicNavigator';
+import { sentrySpotlightInstance } from '../execution/sentrySpotlight';
 
 interface TrackedElement {
   element: HTMLInputElement | HTMLTextAreaElement | HTMLElement;
@@ -547,6 +548,37 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       });
     return true;
   }
+
+  if (message.type === 'TOGGLE_SPOTLIGHT') {
+    sentrySpotlightInstance.toggle();
+    sendResponse({ success: true });
+    return true;
+  }
 });
 
-console.log('[SentryAgent] Content Script v2 (Dual-Track + Risk Gate + Zero-AI Navigator) loaded on', window.location.href);
+// Wire Spotlight security actions directly to on-device pipelines
+sentrySpotlightInstance.registerCallbacks({
+  onSanitize: async () => {
+    return await scanAndSanitizePage('AUTO');
+  },
+  onSeal: async () => {
+    const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas');
+    const activeLevel = determineDisclosureLevel(canvases.length, 'AUTO');
+    const scanReport = await scanAndSanitizePage(activeLevel);
+    const sceneNodes = buildOpaqueSceneGraph();
+    const knownRealValues: string[] = Array.from(trackedElements.values()).map(t => t.originalValue);
+    const sealResult = await egressVerifierInstance.verifyAndSealPayload(
+      sceneNodes,
+      knownRealValues,
+      activeLevel,
+      scanReport.visualDetectionsCount
+    );
+    return { wirePayload: sealResult.payload, scanReport, error: sealResult.error };
+  },
+  onRestore: async () => {
+    restoreOriginalDOM();
+    return { success: true };
+  }
+});
+
+console.log('[SentryAgent] Content Script v2 (Dual-Track + Spotlight HUD + Zero-AI Navigator) loaded on', window.location.href);
