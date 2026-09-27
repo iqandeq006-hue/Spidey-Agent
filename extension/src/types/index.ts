@@ -8,6 +8,7 @@ export type PIIType =
   | 'PASSPORT'
   | 'CONFIDENTIAL_NUM'
   | 'PERSON'
+  | 'USERNAME'
   | 'CANVAS_SIGNATURE'
   | 'AVATAR_FACE'
   | 'CANVAS_TEXT';

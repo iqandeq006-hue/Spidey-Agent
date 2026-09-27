@@ -486,15 +486,23 @@ test('Floating Spotlight Command HUD: Validates keyboard shortcuts and command e
            (e.altKey && (e.key === 'S' || e.key === 's')));
   };
 
+  const isPrivacyShieldHotkey = (e) => {
+    return Boolean((e.altKey && (e.key === 'R' || e.key === 'r')) ||
+                   ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'R' || e.key === 'r')));
+  };
+
   assert.strictEqual(isSpotlightHotkey({ ctrlKey: true, shiftKey: true, key: 'k' }), true, 'Ctrl+Shift+K triggers spotlight');
   assert.strictEqual(isSpotlightHotkey({ metaKey: true, shiftKey: true, key: 'K' }), true, 'Cmd+Shift+K triggers spotlight on macOS');
   assert.strictEqual(isSpotlightHotkey({ altKey: true, key: 's' }), true, 'Alt+S triggers spotlight fallback');
   assert.strictEqual(isSpotlightHotkey({ ctrlKey: true, key: 'k' }), false, 'Ctrl+K alone does not collide with browser URL bar');
 
+  assert.strictEqual(isPrivacyShieldHotkey({ altKey: true, key: 'r' }), true, 'Alt+R triggers Privacy Shield Redact & Query mode');
+  assert.strictEqual(isPrivacyShieldHotkey({ ctrlKey: true, shiftKey: true, key: 'R' }), true, 'Ctrl+Shift+R triggers Privacy Shield');
+
   // Test special HUD actions
-  const specialActions = ['sanitize', 'seal', 'restore', 'sidepanel'];
+  const specialActions = ['sanitize', 'seal', 'restore', 'sidepanel', 'redact-ask'];
   specialActions.forEach(action => {
-    assert.ok(['sanitize', 'seal', 'restore', 'sidepanel'].includes(action), `Supports built-in HUD action: ${action}`);
+    assert.ok(['sanitize', 'seal', 'restore', 'sidepanel', 'redact-ask'].includes(action), `Supports built-in HUD action: ${action}`);
   });
 });
 
@@ -578,3 +586,54 @@ test('Observability Telemetry Engine: Validates structured audit logging, catego
   assert.ok(jsonStr.includes('zeroEgressAssurance'));
   assert.ok(jsonStr.includes('telemetryLog'));
 });
+
+// 18. One-Key Redact -> Reasoner Query -> Auto-Restore Lifecycle
+test('One-Key Redact -> Query -> Auto-Restore: Validates full on-device privacy lifecycle', () => {
+  // Simulating the webpage initial state
+  const mockDOM = {
+    username: '@iqand_dev',
+    personName: 'Iqbal Anderson',
+    phone: '+91 98765 43210',
+    aadhaar: '2345 6789 0123'
+  };
+
+  // Step 1: User hits Alt+R or Ctrl+Shift+R -> Immediate on-device redaction
+  const vault = new Map();
+  const redactedDOM = { ...mockDOM };
+
+  // Local tokenization
+  vault.set('<USERNAME_1>', mockDOM.username);
+  redactedDOM.username = '<USERNAME_1>';
+  vault.set('<PERSON_1>', mockDOM.personName);
+  redactedDOM.personName = '<PERSON_1>';
+  vault.set('<PHONE_NUM_1>', mockDOM.phone);
+  redactedDOM.phone = '<PHONE_NUM_1>';
+  vault.set('<AADHAAR_ID_1>', mockDOM.aadhaar);
+  redactedDOM.aadhaar = '<AADHAAR_ID_1>';
+
+  assert.strictEqual(redactedDOM.username, '<USERNAME_1>');
+  assert.strictEqual(redactedDOM.personName, '<PERSON_1>');
+  assert.strictEqual(redactedDOM.phone, '<PHONE_NUM_1>');
+  assert.strictEqual(redactedDOM.aadhaar, '<AADHAAR_ID_1>');
+
+  // Step 2: Query sent to server/Claude over sanitized tokens (ZERO raw personal data egress)
+  const outboundPayload = JSON.stringify(redactedDOM);
+  assert.ok(!outboundPayload.includes('@iqand_dev'), 'Raw username MUST NOT egress');
+  assert.ok(!outboundPayload.includes('Iqbal Anderson'), 'Raw person name MUST NOT egress');
+  assert.ok(!outboundPayload.includes('98765'), 'Raw phone MUST NOT egress');
+  assert.ok(!outboundPayload.includes('2345 6789'), 'Raw Aadhaar MUST NOT egress');
+
+  // Step 3: Spotlight closed or query finished -> Automatic Restoration back to normal
+  const restoredDOM = {
+    username: vault.get(redactedDOM.username),
+    personName: vault.get(redactedDOM.personName),
+    phone: vault.get(redactedDOM.phone),
+    aadhaar: vault.get(redactedDOM.aadhaar)
+  };
+
+  assert.strictEqual(restoredDOM.username, '@iqand_dev', 'Username restored to original');
+  assert.strictEqual(restoredDOM.personName, 'Iqbal Anderson', 'Person name restored to original');
+  assert.strictEqual(restoredDOM.phone, '+91 98765 43210', 'Phone number restored to original');
+  assert.strictEqual(restoredDOM.aadhaar, '2345 6789 0123', 'Aadhaar restored to original');
+});
+

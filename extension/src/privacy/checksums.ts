@@ -101,9 +101,14 @@ const INDIAN_BANK_IFSC_REGEX = /\b[A-Z]{4}0[A-Z0-9]{6}\b/;
 const BANK_ACCOUNT_REGEX = /\b\d{9,18}\b/;
 const FINANCIAL_BID_REGEX = /(?:₹|Rs\.?|INR)\s*[\d,]+(?:\.\d{2})?|\b[\d]{1,3}(?:,\d{2,3})*(?:\.\d{2})\b/;
 
+const GLOBAL_PHONE_REGEX = /(?:(?:\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}\b)/;
+const USERNAME_HANDLE_REGEX = /^@[A-Za-z0-9_]{3,24}$/;
+const USERNAME_PREFIX_REGEX = /(?:signed\s+in\s+as|logged\s+in\s+as|username:\s*|user:\s*)([A-Za-z0-9_.-]{3,30})/i;
+const GREETING_NAME_REGEX = /(?:welcome|hello|hi),\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i;
+
 // Master classifier function: checks a given text and returns its detected PII type & confidence
 export interface ChecksumMatch {
-  type: 'AADHAAR' | 'PAN' | 'GSTIN' | 'CARD' | 'EMAIL' | 'PHONE' | 'PASSPORT' | 'CONFIDENTIAL_NUM';
+  type: 'AADHAAR' | 'PAN' | 'GSTIN' | 'CARD' | 'EMAIL' | 'PHONE' | 'PASSPORT' | 'CONFIDENTIAL_NUM' | 'USERNAME' | 'PERSON';
   cleanValue: string;
   confidence: number;
 }
@@ -139,22 +144,37 @@ export function classifySensitiveText(text: string): ChecksumMatch | null {
     return { type: 'EMAIL', cleanValue: trimmed, confidence: 0.95 };
   }
 
-  // 6. Check for Indian Phone
-  if (INDIAN_PHONE_REGEX.test(trimmed) && trimmed.replace(/\D/g, '').length >= 10) {
+  // 6. Check for Phone (Indian or International)
+  if ((INDIAN_PHONE_REGEX.test(trimmed) || GLOBAL_PHONE_REGEX.test(trimmed)) && trimmed.replace(/\D/g, '').length >= 10) {
     return { type: 'PHONE', cleanValue: trimmed, confidence: 0.93 };
   }
 
-  // 7. Check for Passport
+  // 7. Check for Username Handle (@user or "Logged in as user")
+  if (USERNAME_HANDLE_REGEX.test(trimmed)) {
+    return { type: 'USERNAME', cleanValue: trimmed, confidence: 0.95 };
+  }
+  const userPrefixMatch = trimmed.match(USERNAME_PREFIX_REGEX);
+  if (userPrefixMatch) {
+    return { type: 'USERNAME', cleanValue: userPrefixMatch[1], confidence: 0.92 };
+  }
+
+  // 8. Check for Person Greeting Name ("Welcome, Vikram", "Hello, Alex")
+  const greetingMatch = trimmed.match(GREETING_NAME_REGEX);
+  if (greetingMatch) {
+    return { type: 'PERSON', cleanValue: greetingMatch[1], confidence: 0.90 };
+  }
+
+  // 9. Check for Passport
   if (INDIAN_PASSPORT_REGEX.test(trimmed)) {
     return { type: 'PASSPORT', cleanValue: trimmed.toUpperCase(), confidence: 0.92 };
   }
 
-  // 8. Check for IFSC or Commercial Bank Account
+  // 10. Check for IFSC or Commercial Bank Account
   if (INDIAN_BANK_IFSC_REGEX.test(trimmed)) {
     return { type: 'CONFIDENTIAL_NUM', cleanValue: trimmed.toUpperCase(), confidence: 0.90 };
   }
 
-  // 9. Financial Quotation or Confidential Price
+  // 11. Financial Quotation or Confidential Price
   if (FINANCIAL_BID_REGEX.test(trimmed) && (trimmed.includes('₹') || trimmed.includes('INR') || (trimmed.includes(',') && trimmed.includes('.')))) {
     return { type: 'CONFIDENTIAL_NUM', cleanValue: trimmed, confidence: 0.88 };
   }

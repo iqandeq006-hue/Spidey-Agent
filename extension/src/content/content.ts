@@ -554,7 +554,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 });
 
-// Wire Spotlight security actions directly to on-device pipelines
+// Wire Spotlight security actions directly to on-device pipelines & reasoner
 sentrySpotlightInstance.registerCallbacks({
   onSanitize: async () => {
     return await scanAndSanitizePage('AUTO');
@@ -576,6 +576,76 @@ sentrySpotlightInstance.registerCallbacks({
   onRestore: async () => {
     restoreOriginalDOM();
     return { success: true };
+  },
+  onQueryServer: async (query: string) => {
+    // 1. Ensure page is sanitized locally before anything leaves
+    if (!isCurrentlySanitized) {
+      await scanAndSanitizePage('AUTO');
+    }
+
+    // 2. Build Zero-PII Opaque Scene Graph
+    const sceneNodes = buildOpaqueSceneGraph();
+    const knownRealValues: string[] = Array.from(trackedElements.values()).map(t => t.originalValue);
+
+    // 3. Seal payload with SHA-256 digest
+    const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas');
+    const activeLevel = determineDisclosureLevel(canvases.length, 'AUTO');
+    const sealResult = await egressVerifierInstance.verifyAndSealPayload(
+      sceneNodes,
+      knownRealValues,
+      activeLevel,
+      0
+    );
+
+    const startT = performance.now();
+    let answer = '';
+    let actions: PlannedAction[] = [];
+    let latencyMs = 0;
+
+    // 4. Try remote reasoner server (e.g. localhost:8000 or Claude bridge)
+    try {
+      const resp = await fetch('http://localhost:8000/api/v1/plan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Sentry-Digest': sealResult.payload?.digestSha256 || ''
+        },
+        body: JSON.stringify({
+          ...sealResult.payload,
+          userGoal: query
+        })
+      });
+
+      latencyMs = Math.round(performance.now() - startT);
+      if (resp.ok) {
+        const data = await resp.json();
+        answer = data.thought || data.explanation || `Reasoning complete over ${sceneNodes.length} sanitized UI nodes.`;
+        actions = data.actions || [];
+      } else {
+        throw new Error(`Server returned HTTP ${resp.status}`);
+      }
+    } catch (netErr) {
+      latencyMs = Math.round(performance.now() - startT);
+      // Fallback: Local System-1 Decision Engine (100% on-device, < 2ms)
+      const localDecision = localSystem1EngineInstance.evaluate(query, sceneNodes);
+      if (localDecision && localDecision.confidence >= 0.70) {
+        answer = `⚡ Local System 1 Reasoner (${localDecision.latencyMs}ms, 100% on-device):\nInstinctive match for "${query}". Target: "${localDecision.action.targetLabel}" with ${(localDecision.confidence * 100).toFixed(0)}% confidence.`;
+        actions = [localDecision.action];
+      } else {
+        answer = `🛡️ Zero-PII Egress Verified (Digest: ${sealResult.payload?.digestSha256?.substring(0, 10)}...)\nProtected ${vaultInstance.size()} confidential entity tokens. Scanned ${sceneNodes.length} elements.\nServer is offline, but all personal data remains securely locked in your local vault.`;
+      }
+    }
+
+    return {
+      answer,
+      actions,
+      digest: sealResult.payload?.digestSha256,
+      redactedCount: vaultInstance.size(),
+      latencyMs
+    };
+  },
+  onExecuteAction: async (action: PlannedAction) => {
+    return await actionDispatcherInstance.executeAction(action);
   }
 });
 

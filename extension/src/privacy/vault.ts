@@ -137,6 +137,7 @@ export class LocalInversionVault {
       case 'PASSPORT': return 'PASSPORT_ID';
       case 'CONFIDENTIAL_NUM': return 'CONFIDENTIAL_VAL';
       case 'PERSON': return 'PERSON';
+      case 'USERNAME': return 'USERNAME';
       case 'CANVAS_SIGNATURE': return 'REDACTED_SIGNATURE';
       case 'AVATAR_FACE': return 'REDACTED_AVATAR';
       default: return 'PROTECTED_DATA';

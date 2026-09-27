@@ -1,10 +1,18 @@
-// SentryAgent In-Page Floating Spotlight Command Bar (Zero-AI HUD)
-// Triggered via Ctrl+Shift+K (or Cmd+Shift+K) / Alt+S on any webpage.
+// SentryAgent In-Page Floating Spotlight Command Bar (Zero-AI HUD + Privacy Shield)
+// Triggered via Alt+R or Ctrl+Shift+R (Redact & Query Mode) or Ctrl+Shift+K / Alt+S (Standard HUD)
 // Operates in an isolated Shadow DOM with zero CSS bleed.
-// Enables sub-millisecond keyword search, button clicks, form fills, and privacy commands with 0 LLM tokens.
+// Enables sub-millisecond keyword search, button clicks, form fills, privacy commands, and safe AI queries.
 
 import { deterministicNavigatorInstance } from './deterministicNavigator';
 import { cursorReticleInstance } from './cursorReticle';
+
+export interface ReasonerQueryResponse {
+  answer: string;
+  actions?: any[];
+  digest?: string;
+  redactedCount?: number;
+  latencyMs?: number;
+}
 
 export class SentrySpotlight {
   private container: HTMLDivElement | null = null;
@@ -13,11 +21,15 @@ export class SentrySpotlight {
   private inputEl: HTMLInputElement | null = null;
   private resultsEl: HTMLDivElement | null = null;
   private statusBadgeEl: HTMLSpanElement | null = null;
+  private privacyBannerEl: HTMLDivElement | null = null;
+  private autoRestoreOnClose: boolean = false;
 
   // Callbacks for global page commands
   private onSanitize?: () => Promise<any>;
   private onSeal?: () => Promise<any>;
   private onRestore?: () => Promise<any>;
+  private onQueryServer?: (query: string) => Promise<ReasonerQueryResponse>;
+  private onExecuteAction?: (action: any) => Promise<any>;
 
   constructor() {
     this.registerGlobalHotkey();
@@ -27,16 +39,30 @@ export class SentrySpotlight {
     onSanitize?: () => Promise<any>;
     onSeal?: () => Promise<any>;
     onRestore?: () => Promise<any>;
+    onQueryServer?: (query: string) => Promise<ReasonerQueryResponse>;
+    onExecuteAction?: (action: any) => Promise<any>;
   }) {
     this.onSanitize = opts.onSanitize;
     this.onSeal = opts.onSeal;
     this.onRestore = opts.onRestore;
+    this.onQueryServer = opts.onQueryServer;
+    this.onExecuteAction = opts.onExecuteAction;
   }
 
   private registerGlobalHotkey(): void {
     window.addEventListener('keydown', (e: KeyboardEvent) => {
-      // Shortcut 1: Ctrl+Shift+K or Cmd+Shift+K
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+      // Shortcut 1: Alt+R or Ctrl+Shift+R / Cmd+Shift+R -> "Redact & Ask AI" Mode
+      if ((e.altKey && (e.key === 'R' || e.key === 'r')) ||
+          (isCtrlOrCmd && e.shiftKey && (e.key === 'R' || e.key === 'r'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.openWithPrivacyShield();
+        return;
+      }
+
+      // Shortcut 2: Ctrl+Shift+K or Cmd+Shift+K -> Standard Spotlight
       if (isCtrlOrCmd && e.shiftKey && (e.key === 'K' || e.key === 'k')) {
         e.preventDefault();
         e.stopPropagation();
@@ -44,7 +70,7 @@ export class SentrySpotlight {
         return;
       }
 
-      // Shortcut 2: Alt+S
+      // Shortcut 3: Alt+S
       if (e.altKey && (e.key === 'S' || e.key === 's')) {
         e.preventDefault();
         e.stopPropagation();
@@ -52,7 +78,7 @@ export class SentrySpotlight {
         return;
       }
 
-      // Escape key closes spotlight
+      // Escape key closes spotlight (and auto-restores if privacy shield was engaged)
       if (e.key === 'Escape' && this.isOpen) {
         e.preventDefault();
         this.close();
@@ -90,7 +116,7 @@ export class SentrySpotlight {
         display: flex;
         align-items: flex-start;
         justify-content: center;
-        padding-top: 14vh;
+        padding-top: 13vh;
         animation: fadeIn 0.15s ease-out;
       }
 
@@ -105,12 +131,12 @@ export class SentrySpotlight {
       }
 
       .palette {
-        width: 640px;
+        width: 660px;
         max-width: 92vw;
-        background: rgba(15, 23, 42, 0.95);
+        background: rgba(15, 23, 42, 0.96);
         border: 1.5px solid rgba(56, 189, 248, 0.4);
         border-radius: 14px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 25px rgba(6, 182, 212, 0.25);
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), 0 0 25px rgba(6, 182, 212, 0.25);
         overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'JetBrains Mono', monospace;
         color: #f1f5f9;
@@ -141,8 +167,8 @@ export class SentrySpotlight {
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #f59e0b;
-        box-shadow: 0 0 8px #f59e0b;
+        background: #10b981;
+        box-shadow: 0 0 8px #10b981;
       }
 
       .header-right {
@@ -161,6 +187,36 @@ export class SentrySpotlight {
         font-size: 10px;
         font-family: monospace;
         color: #cbd5e1;
+      }
+
+      /* Privacy Shield Banner */
+      .privacy-banner {
+        background: linear-gradient(90deg, rgba(16, 185, 129, 0.18), rgba(6, 182, 212, 0.15));
+        border-bottom: 1px solid rgba(16, 185, 129, 0.35);
+        padding: 9px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11.5px;
+        color: #a7f3d0;
+        transition: all 0.2s ease;
+      }
+
+      .banner-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+      }
+
+      .banner-badge {
+        background: rgba(16, 185, 129, 0.25);
+        border: 1px solid rgba(16, 185, 129, 0.45);
+        color: #34d399;
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 700;
       }
 
       .input-wrapper {
@@ -182,7 +238,7 @@ export class SentrySpotlight {
         background: transparent;
         border: none;
         outline: none;
-        font-size: 16px;
+        font-size: 15px;
         color: #f8fafc;
         font-family: inherit;
       }
@@ -193,7 +249,7 @@ export class SentrySpotlight {
 
       .status-pill {
         font-size: 11px;
-        padding: 4px 8px;
+        padding: 3px 8px;
         border-radius: 6px;
         background: rgba(16, 185, 129, 0.15);
         border: 1px solid rgba(16, 185, 129, 0.3);
@@ -207,7 +263,7 @@ export class SentrySpotlight {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 16px;
+        padding: 9px 16px;
         overflow-x: auto;
         border-bottom: 1px solid rgba(255, 255, 255, 0.04);
         background: rgba(15, 23, 42, 0.4);
@@ -222,7 +278,7 @@ export class SentrySpotlight {
         color: #cbd5e1;
         padding: 4px 10px;
         border-radius: 20px;
-        font-size: 12px;
+        font-size: 11.5px;
         cursor: pointer;
         transition: all 0.15s ease;
         white-space: nowrap;
@@ -235,17 +291,30 @@ export class SentrySpotlight {
         transform: translateY(-1px);
       }
 
+      .chip-shield {
+        background: rgba(16, 185, 129, 0.2);
+        border-color: rgba(16, 185, 129, 0.45);
+        color: #34d399;
+        font-weight: 600;
+      }
+
+      .chip-shield:hover {
+        background: rgba(16, 185, 129, 0.35);
+        border-color: #10b981;
+        color: #6ee7b7;
+      }
+
       .results-area {
-        max-height: 240px;
+        max-height: 270px;
         overflow-y: auto;
-        padding: 8px 0;
+        padding: 6px 0;
       }
 
       .result-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 10px 16px;
+        padding: 9px 16px;
         cursor: pointer;
         transition: background 0.1s ease;
         border-left: 2px solid transparent;
@@ -289,6 +358,109 @@ export class SentrySpotlight {
         font-family: monospace;
       }
 
+      /* AI Response Box */
+      .ai-response-box {
+        padding: 14px 16px;
+        background: rgba(15, 23, 42, 0.9);
+        border-radius: 8px;
+        margin: 8px 12px;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        animation: fadeIn 0.2s ease;
+      }
+
+      .ai-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        font-weight: 700;
+        color: #38bdf8;
+      }
+
+      .digest-pill {
+        font-size: 10px;
+        background: rgba(16, 185, 129, 0.15);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #34d399;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+      }
+
+      .ai-body {
+        font-size: 13px;
+        line-height: 1.55;
+        color: #f1f5f9;
+        white-space: pre-wrap;
+      }
+
+      .ai-actions-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .btn-ai-action {
+        background: rgba(56, 189, 248, 0.2);
+        border: 1px solid rgba(56, 189, 248, 0.45);
+        color: #38bdf8;
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .btn-ai-action:hover {
+        background: rgba(56, 189, 248, 0.35);
+        border-color: #38bdf8;
+      }
+
+      .btn-restore-action {
+        background: rgba(245, 158, 11, 0.2);
+        border: 1px solid rgba(245, 158, 11, 0.45);
+        color: #fbbf24;
+        padding: 5px 12px;
+        border-radius: 6px;
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .btn-restore-action:hover {
+        background: rgba(245, 158, 11, 0.35);
+        border-color: #fbbf24;
+      }
+
+      .ai-loading-box {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 20px 16px;
+        color: #94a3b8;
+        font-size: 13px;
+      }
+
+      .spinner {
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(56, 189, 248, 0.3);
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
       .footer-bar {
         display: flex;
         align-items: center;
@@ -322,32 +494,39 @@ export class SentrySpotlight {
       <div class="palette-header">
         <div class="brand">
           <div class="brand-dot"></div>
-          <span>SentryAgent Zero-AI Spotlight</span>
+          <span>SentryAgent Spotlight & Privacy Shield</span>
         </div>
         <div class="header-right">
           <span>0 Cloud LLM Calls</span>
           <span class="kbd-badge">ESC to close</span>
         </div>
       </div>
+      <div class="privacy-banner" id="sentry-privacy-banner" style="display: none;">
+        <div class="banner-left">
+          <span>🛡️</span>
+          <span id="sentry-privacy-text">Privacy Shield Active: Page anonymized locally</span>
+        </div>
+        <span class="banner-badge">Auto-Restores on ESC</span>
+      </div>
       <div class="input-wrapper">
         <span class="search-icon">⚡</span>
-        <input class="command-input" type="text" placeholder="Type: search cryogenic, click download, sanitize, seal..." spellcheck="false" autocomplete="off" />
+        <input class="command-input" type="text" placeholder="Type query for Claude, or command (e.g. click submit, search tender)..." spellcheck="false" autocomplete="off" />
         <span class="status-pill" id="sentry-status-badge">✓ 0.8ms</span>
       </div>
       <div class="chips-bar">
+        <button class="chip-btn chip-shield" data-cmd="redact-ask">🛡️ Redact & Query (Alt+R)</button>
         <button class="chip-btn" data-cmd="search ">🔍 Search Page</button>
         <button class="chip-btn" data-cmd="click ">⚡ Click Button</button>
-        <button class="chip-btn" data-cmd="sanitize">🛡️ Sanitize DOM</button>
-        <button class="chip-btn" data-cmd="seal">🔒 Seal & Verify</button>
         <button class="chip-btn" data-cmd="restore">🔄 Restore DOM</button>
+        <button class="chip-btn" data-cmd="seal">🔒 Seal & Verify</button>
         <button class="chip-btn" data-cmd="sidepanel">◫ Side Panel</button>
       </div>
       <div class="results-area" id="sentry-results"></div>
       <div class="footer-bar">
-        <div><span>Engine:</span> <strong style="color: #38bdf8;">Deterministic DOM + OmniParser Heuristics</strong></div>
+        <div><span>Engine:</span> <strong style="color: #38bdf8;">On-Device Privacy Vault + Local Reasoner</strong></div>
         <div class="footer-shortcuts">
-          <span><span class="kbd-badge">↵</span> Execute</span>
-          <span><span class="kbd-badge">Ctrl+Shift+K</span> Toggle</span>
+          <span><span class="kbd-badge">↵</span> Execute / Query</span>
+          <span><span class="kbd-badge">Alt+R</span> Redact & Chat</span>
         </div>
       </div>
     `;
@@ -359,13 +538,16 @@ export class SentrySpotlight {
     this.inputEl = this.shadow.querySelector('input.command-input') as HTMLInputElement;
     this.resultsEl = this.shadow.querySelector('#sentry-results') as HTMLDivElement;
     this.statusBadgeEl = this.shadow.querySelector('#sentry-status-badge') as HTMLSpanElement;
+    this.privacyBannerEl = this.shadow.querySelector('#sentry-privacy-banner') as HTMLDivElement;
 
     // Attach chip event listeners
     const chips = this.shadow.querySelectorAll('.chip-btn');
     chips.forEach((btn) => {
       btn.addEventListener('click', () => {
         const cmd = (btn as HTMLElement).getAttribute('data-cmd') || '';
-        if (cmd === 'sanitize' || cmd === 'seal' || cmd === 'restore' || cmd === 'sidepanel') {
+        if (cmd === 'redact-ask') {
+          this.openWithPrivacyShield();
+        } else if (cmd === 'sanitize' || cmd === 'seal' || cmd === 'restore' || cmd === 'sidepanel') {
           this.executeSpecialCommand(cmd);
         } else {
           if (this.inputEl) {
@@ -394,6 +576,85 @@ export class SentrySpotlight {
     });
   }
 
+  // 1. "Redact & Ask AI" Workflow (Triggered via Alt+R or Ctrl+Shift+R)
+  public async openWithPrivacyShield(): Promise<void> {
+    this.autoRestoreOnClose = true;
+    this.open();
+
+    this.setPrivacyBanner(true, 'Sanitizing page (Names, Usernames, Phones, Aadhaar, PAN, Signatures)...');
+    this.showStatus('🛡️ Sanitizing...', '#38bdf8');
+
+    if (this.onSanitize) {
+      try {
+        const rep = await this.onSanitize();
+        const total = rep?.redactedCount || rep?.totalRedacted || 0;
+        this.setPrivacyBanner(
+          true,
+          `🛡️ PRIVACY SHIELD ACTIVE: ${total} item(s) redacted (Names, Usernames, Phones, IDs). Values auto-restore on ESC.`
+        );
+        this.showStatus(`✓ ${total} items protected`, '#34d399');
+        if (this.inputEl) {
+          this.inputEl.placeholder = 'Ask Claude / Reasoner anything safely (e.g. summarize document, fill form)...';
+        }
+      } catch (err) {
+        console.error('[SentrySpotlight] Sanitization failed:', err);
+        this.showStatus('Sanitization error', '#f87171');
+      }
+    }
+  }
+
+  private setPrivacyBanner(show: boolean, msg?: string): void {
+    if (!this.privacyBannerEl) return;
+    if (show) {
+      this.privacyBannerEl.style.display = 'flex';
+      const textEl = this.privacyBannerEl.querySelector('#sentry-privacy-text');
+      if (textEl && msg) textEl.textContent = msg;
+    } else {
+      this.privacyBannerEl.style.display = 'none';
+    }
+  }
+
+  // Floating Toast Notification on Webpage
+  private showFloatingToast(msg: string): void {
+    const toast = document.createElement('div');
+    toast.className = 'sentry-toast-notification';
+    toast.style.cssText = `
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      background: rgba(15, 23, 42, 0.96);
+      border: 1.5px solid rgba(16, 185, 129, 0.6);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 15px rgba(16, 185, 129, 0.3);
+      color: #34d399;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 22px;
+      border-radius: 24px;
+      z-index: 2147483647;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    `;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => {
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateX(-50%) translateY(0)';
+    });
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(-50%) translateY(-10px)';
+      setTimeout(() => toast.remove(), 300);
+    }, 2800);
+  }
+
   // Render live predictive suggestions matching page elements
   private renderSuggestions(query: string): void {
     if (!this.resultsEl) return;
@@ -403,12 +664,12 @@ export class SentrySpotlight {
     if (!trimmed) {
       // Default help suggestions
       this.resultsEl.innerHTML = `
-        <div class="result-item" data-cmd="search tender">
+        <div class="result-item" data-cmd="redact-ask">
           <div class="item-left">
-            <span class="item-verb">SEARCH</span>
+            <span class="item-verb" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">SHIELD</span>
             <div>
-              <div class="item-title">Search active page for keywords</div>
-              <div class="item-subtitle">e.g. search propellant, find registration</div>
+              <div class="item-title">Redact Webpage & Ask AI (Alt+R)</div>
+              <div class="item-subtitle">Redacts names, usernames, phones & IDs. Auto-restores when closed!</div>
             </div>
           </div>
           <div class="item-right">&lt; 1ms</div>
@@ -423,15 +684,15 @@ export class SentrySpotlight {
           </div>
           <div class="item-right">&lt; 1ms</div>
         </div>
-        <div class="result-item" data-cmd="sanitize">
+        <div class="result-item" data-cmd="search tender">
           <div class="item-left">
-            <span class="item-verb" style="background: rgba(16, 185, 129, 0.2); color: #10b981;">SECURITY</span>
+            <span class="item-verb">SEARCH</span>
             <div>
-              <div class="item-title">Scan & Anonymize On-Device</div>
-              <div class="item-subtitle">Redacts Aadhaar, PAN, GSTIN & Canvas visual signatures</div>
+              <div class="item-title">Search active page or web for keywords</div>
+              <div class="item-subtitle">e.g. search propellant, find registration</div>
             </div>
           </div>
-          <div class="item-right">L0-L2</div>
+          <div class="item-right">&lt; 1ms</div>
         </div>
       `;
     } else {
@@ -472,7 +733,7 @@ export class SentrySpotlight {
       candidates.sort((a, b) => b.score - a.score);
 
       if (candidates.length > 0) {
-        candidates.slice(0, 5).forEach((cand) => {
+        candidates.slice(0, 4).forEach((cand) => {
           const item = document.createElement('div');
           item.className = 'result-item';
           item.innerHTML = `
@@ -491,14 +752,15 @@ export class SentrySpotlight {
           this.resultsEl?.appendChild(item);
         });
       } else {
+        // Query server / Claude card option
         const item = document.createElement('div');
         item.className = 'result-item';
         item.innerHTML = `
           <div class="item-left">
-            <span class="item-verb">${parsed.verb}</span>
+            <span class="item-verb" style="background: rgba(16, 185, 129, 0.2); color: #34d399;">ASK AI</span>
             <div>
-              <div class="item-title">Execute "${this.escapeHtml(query)}"</div>
-              <div class="item-subtitle">Press Enter to dispatch directly via deterministic engine</div>
+              <div class="item-title">Query Reasoner: "${this.escapeHtml(query)}"</div>
+              <div class="item-subtitle">Sends sanitized scene graph (zero personal data leaked)</div>
             </div>
           </div>
           <div class="item-right">Enter ↵</div>
@@ -510,11 +772,13 @@ export class SentrySpotlight {
       }
     }
 
-    // Attach click to items
+    // Attach click to items with data-cmd
     this.resultsEl.querySelectorAll('.result-item[data-cmd]').forEach((item) => {
       item.addEventListener('click', () => {
         const cmd = item.getAttribute('data-cmd') || '';
-        if (cmd === 'sanitize') {
+        if (cmd === 'redact-ask') {
+          this.openWithPrivacyShield();
+        } else if (cmd === 'sanitize') {
           this.executeSpecialCommand('sanitize');
         } else {
           if (this.inputEl) {
@@ -535,7 +799,7 @@ export class SentrySpotlight {
       if (this.onSanitize) {
         const rep = await this.onSanitize();
         const elapsed = Math.round(performance.now() - startTime);
-        this.showStatus(`✓ Redacted ${rep?.totalRedacted || 0} items in ${elapsed}ms`, '#34d399');
+        this.showStatus(`✓ Redacted ${rep?.redactedCount || rep?.totalRedacted || 0} items in ${elapsed}ms`, '#34d399');
       }
       setTimeout(() => this.close(), 700);
       return;
@@ -569,28 +833,122 @@ export class SentrySpotlight {
     }
   }
 
-  // Execute full command string
+  // Execute full command string or AI query
   public async execute(commandStr: string): Promise<void> {
-    const trimmed = commandStr.trim().toLowerCase();
-    if (trimmed === 'sanitize' || trimmed === 'seal' || trimmed === 'restore' || trimmed === 'sidepanel') {
-      await this.executeSpecialCommand(trimmed);
+    const trimmed = commandStr.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (lower === 'redact-ask') {
+      await this.openWithPrivacyShield();
       return;
     }
 
-    this.showStatus('Dispatching...', '#38bdf8');
-    const result = await deterministicNavigatorInstance.executeCommand(commandStr);
+    if (lower === 'sanitize' || lower === 'seal' || lower === 'restore' || lower === 'sidepanel') {
+      await this.executeSpecialCommand(lower);
+      return;
+    }
 
-    if (result.success) {
-      this.showStatus(`✓ ${result.message} (${result.latencyMs}ms)`, '#34d399');
-      // Trigger cursor reticle visual feedback if target coordinates are available
-      if (result.targetX !== undefined && result.targetY !== undefined) {
-        cursorReticleInstance.glideTo(result.targetX, result.targetY, result.targetLabel || 'Target', result.executedVerb);
+    // Check if input is a direct page command (click or search on known DOM elements)
+    const isDirectNav = lower.startsWith('click ') || lower.startsWith('tap ') ||
+                        lower.startsWith('search ') || lower.startsWith('find ') ||
+                        lower.startsWith('scroll ');
+
+    if (isDirectNav) {
+      this.showStatus('Dispatching...', '#38bdf8');
+      const result = await deterministicNavigatorInstance.executeCommand(trimmed);
+
+      if (result.success) {
+        this.showStatus(`✓ ${result.message} (${result.latencyMs}ms)`, '#34d399');
+        if (result.targetX !== undefined && result.targetY !== undefined) {
+          cursorReticleInstance.glideTo(result.targetX, result.targetY, result.targetLabel || 'Target', result.executedVerb);
+        }
+        setTimeout(() => {
+          this.close();
+        }, 650);
+        return;
       }
-      setTimeout(() => {
-        this.close();
-      }, 650);
+    }
+
+    // Otherwise, treat as an AI / Server Reasoning Query (over sanitized zero-PII DOM)
+    if (this.onQueryServer) {
+      if (!this.resultsEl) return;
+      this.resultsEl.innerHTML = `
+        <div class="ai-loading-box">
+          <div class="spinner"></div>
+          <span>Sealing sanitized scene graph (SHA-256) & querying Reasoner...</span>
+        </div>
+      `;
+      this.showStatus('Querying Reasoner...', '#38bdf8');
+
+      try {
+        const res = await this.onQueryServer(trimmed);
+        this.showStatus(`✓ Done (${res.latencyMs || 25}ms)`, '#34d399');
+
+        this.resultsEl.innerHTML = `
+          <div class="ai-response-box">
+            <div class="ai-header">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span>🤖 REASONER RESPONSE</span>
+                <span class="status-pill" style="display: inline-block;">${res.latencyMs || 25}ms</span>
+              </div>
+              <span class="digest-pill">SHA-256: ${(res.digest || 'VERIFIED').substring(0, 10)}...</span>
+            </div>
+            <div class="ai-body">${this.escapeHtml(res.answer)}</div>
+            <div class="ai-actions-row">
+              ${res.actions && res.actions.length > 0 ? `
+                <button class="btn-ai-action" id="sentry-exec-action">⚡ Execute ${res.actions[0].action} (${res.actions[0].riskTier || 'TIER_1'})</button>
+              ` : ''}
+              <button class="btn-restore-action" id="sentry-restore-close">🔄 Restore Webpage & Close (ESC)</button>
+            </div>
+          </div>
+        `;
+
+        // Wire Action Execution button
+        const execBtn = this.shadow?.querySelector('#sentry-exec-action');
+        if (execBtn && res.actions && res.actions.length > 0) {
+          execBtn.addEventListener('click', async () => {
+            if (this.onExecuteAction) {
+              const execRes = await this.onExecuteAction(res.actions![0]);
+              this.showStatus(`✓ ${execRes.message || 'Action executed'}`, '#34d399');
+              setTimeout(() => this.close(), 700);
+            }
+          });
+        }
+
+        // Wire Restore & Close button
+        const restoreBtn = this.shadow?.querySelector('#sentry-restore-close');
+        if (restoreBtn) {
+          restoreBtn.addEventListener('click', () => {
+            this.close();
+          });
+        }
+        return;
+      } catch (err: any) {
+        this.showStatus('Reasoner error', '#f87171');
+        if (this.resultsEl) {
+          this.resultsEl.innerHTML = `
+            <div class="ai-response-box" style="border-color: rgba(239, 68, 68, 0.4);">
+              <div class="ai-header" style="color: #f87171;">⚠️ REASONER ERROR</div>
+              <div class="ai-body">${this.escapeHtml(err?.message || 'Server error')}</div>
+              <div class="ai-actions-row">
+                <button class="btn-restore-action" id="sentry-err-restore">🔄 Restore Webpage & Close</button>
+              </div>
+            </div>
+          `;
+          const errRestoreBtn = this.shadow?.querySelector('#sentry-err-restore');
+          errRestoreBtn?.addEventListener('click', () => this.close());
+        }
+        return;
+      }
+    }
+
+    // Fallback if onQueryServer is not registered
+    const fallbackResult = await deterministicNavigatorInstance.executeCommand(trimmed);
+    if (fallbackResult.success) {
+      this.showStatus(`✓ ${fallbackResult.message}`, '#34d399');
+      setTimeout(() => this.close(), 650);
     } else {
-      this.showStatus(`⚠ ${result.message} (${result.latencyMs}ms)`, '#f87171');
+      this.showStatus(`⚠ ${fallbackResult.message}`, '#f87171');
     }
   }
 
@@ -615,11 +973,25 @@ export class SentrySpotlight {
     }
   }
 
-  public close(): void {
+  public async close(): Promise<void> {
     if (this.container) {
       this.container.style.display = 'none';
       this.isOpen = false;
       if (this.statusBadgeEl) this.statusBadgeEl.style.display = 'none';
+      this.setPrivacyBanner(false);
+
+      // Auto-restore original DOM values if shield was active
+      if (this.autoRestoreOnClose) {
+        this.autoRestoreOnClose = false;
+        if (this.onRestore) {
+          try {
+            await this.onRestore();
+            this.showFloatingToast('🔄 Webpage Restored: Real values safely restored back to normal.');
+          } catch (restoreErr) {
+            console.error('[SentrySpotlight] Error restoring DOM:', restoreErr);
+          }
+        }
+      }
     }
   }
 
