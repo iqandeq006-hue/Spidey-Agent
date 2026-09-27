@@ -1,4 +1,6 @@
-// SentryAgent Popup Controller v2 (Phases 1-4)
+// SentryAgent Popup Controller v2.5 (Observability & Full Audit Trail)
+
+import { observabilityLogger, ObservabilityLogEntry, LogCategory } from '../network/observabilityLogger';
 
 interface VaultRow {
   token: string;
@@ -17,13 +19,101 @@ window.addEventListener('DOMContentLoaded', async () => {
   const vaultBadge = document.getElementById('vault-count-badge') as HTMLElement;
   const vaultList = document.getElementById('vault-list') as HTMLElement;
 
+  // Observability Log Elements
+  const tabBtnLogs = document.getElementById('tab-btn-logs') as HTMLButtonElement;
+  const tabBtnVault = document.getElementById('tab-btn-vault') as HTMLButtonElement;
+  const panelLogs = document.getElementById('panel-logs') as HTMLElement;
+  const panelVault = document.getElementById('panel-vault') as HTMLElement;
+  const logList = document.getElementById('log-list') as HTMLElement;
+  const btnClearLogs = document.getElementById('btn-clear-logs') as HTMLButtonElement;
+  const btnExportLogs = document.getElementById('btn-export-logs') as HTMLButtonElement;
+  const filterChips = document.querySelectorAll('.filter-chip');
+
+  let activeFilter: string = 'ALL';
+
+  // 1. Tab Switching: Live Logs vs Vault
+  tabBtnLogs?.addEventListener('click', () => {
+    tabBtnLogs.classList.add('active');
+    tabBtnVault.classList.remove('active');
+    panelLogs.style.display = 'block';
+    panelVault.style.display = 'none';
+  });
+
+  tabBtnVault?.addEventListener('click', () => {
+    tabBtnVault.classList.add('active');
+    tabBtnLogs.classList.remove('active');
+    panelVault.style.display = 'block';
+    panelLogs.style.display = 'none';
+  });
+
+  // 2. Render Observability Logs
+  async function renderLogs() {
+    if (!logList) return;
+    const logs = await observabilityLogger.getLogs();
+
+    const filtered = activeFilter === 'ALL'
+      ? logs
+      : logs.filter(l => l.category === activeFilter);
+
+    if (filtered.length === 0) {
+      logList.innerHTML = `<div class="log-empty">No ${activeFilter !== 'ALL' ? activeFilter : ''} events recorded yet.</div>`;
+      return;
+    }
+
+    logList.innerHTML = filtered.map(log => `
+      <div class="log-entry cat-${escapeHtml(log.category)}">
+        <div class="log-header">
+          <span class="cat-badge">${escapeHtml(log.category)}</span>
+          <span class="log-time">${escapeHtml(log.timeFormatted)}</span>
+        </div>
+        <div class="log-title">${escapeHtml(log.title)} ${log.latencyMs !== undefined ? `<span style="color: #38bdf8; font-family: monospace;">(${log.latencyMs}ms)</span>` : ''}</div>
+        ${log.details ? `<div class="log-details">${escapeHtml(log.details)}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  // Filter Chip Listeners
+  filterChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      filterChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      activeFilter = chip.getAttribute('data-filter') || 'ALL';
+      renderLogs();
+    });
+  });
+
+  // Clear Logs
+  btnClearLogs?.addEventListener('click', async () => {
+    await observabilityLogger.clearLogs();
+    renderLogs();
+  });
+
+  // Export JSON Audit Trail
+  btnExportLogs?.addEventListener('click', () => {
+    const jsonStr = observabilityLogger.exportAuditReport();
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sentry-audit-trail-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Real-time listener for log broadcasts
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'OBSERVABILITY_LOG_EVENT') {
+      renderLogs();
+    }
+  });
+
+  // 3. Tab Management
   async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const current = tabs[0];
     if (current && !current.url?.startsWith('chrome-extension://') && !current.url?.startsWith('chrome://')) {
       return current;
     }
-    // If popup is opened in its own window/tab, locate the web application tab
     const allTabs = await chrome.tabs.query({});
     const webTab = allTabs.find(t => t.url && (t.url.startsWith('http://') || t.url.startsWith('https://') || t.url.startsWith('file://')));
     return webTab || current;
@@ -31,10 +121,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   async function ensureContentScriptLoaded(tabId: number, url?: string): Promise<{ ok: boolean; reason?: string }> {
     if (url && (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('about:') || url.startsWith('chrome-extension://'))) {
-      return { ok: false, reason: 'Chrome security prevents running extensions on browser internal pages. Please navigate to http://localhost:3000.' };
+      return { ok: false, reason: 'Chrome security prevents running extensions on browser internal pages (chrome://). Please navigate to any real website (e.g. google.com, wikipedia.org, or any public portal).' };
     }
 
-    // 1. First probe if content script is already listening
     const isAlive = await new Promise<boolean>((resolve) => {
       chrome.tabs.sendMessage(tabId, { type: 'GET_VAULT_STATUS' }, (res) => {
         if (chrome.runtime.lastError || !res) {
@@ -47,13 +136,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     if (isAlive) return { ok: true };
 
-    // 2. If not responsive, try injecting content.js programmatically
     try {
       await chrome.scripting.executeScript({
         target: { tabId },
         files: ['content.js']
       });
-      // Small pause to allow listeners to bind
       await new Promise(r => setTimeout(r, 120));
       return { ok: true };
     } catch (err: any) {
@@ -88,6 +175,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {
       console.error('[SentryAgent Popup] Error connecting to tab:', e);
     }
+    renderLogs();
   }
 
   function updateUIState(isSanitized: boolean, entries: VaultRow[], totalCount: number) {
@@ -136,7 +224,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    chrome.tabs.sendMessage(tab.id, { type: 'RUN_AUTONOMOUS_STEP' }, (response) => {
+    await observabilityLogger.log('DECISION', 'INFO', 'Triggered autonomous agent loop on active tab', `URL: ${tab.url}`);
+
+    chrome.tabs.sendMessage(tab.id, { type: 'RUN_AUTONOMOUS_STEP' }, async (response) => {
       btnAutonomous.disabled = false;
       btnAutonomous.innerHTML = '<span class="btn-icon">🤖</span> Run End-to-End Agent Loop';
 
@@ -146,9 +236,11 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
 
       if (response && response.success) {
+        await observabilityLogger.log('EXECUTION', 'SUCCESS', `Autonomous step executed: ${response.message}`);
         refreshStatus();
-        window.close(); // Close popup so user sees the on-screen Risk Gate modal on the page!
+        window.close(); // Close popup so user sees on-screen Risk Gate modal
       } else {
+        await observabilityLogger.log('RISK_GATE', 'WARN', `Autonomous step paused or failed: ${response?.message}`);
         alert(response?.message || 'Autonomous step encountered an issue. Check console.');
       }
     });
@@ -170,7 +262,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    chrome.tabs.sendMessage(tab.id, { type: 'SCAN_AND_SANITIZE' }, (response) => {
+    chrome.tabs.sendMessage(tab.id, { type: 'SCAN_AND_SANITIZE' }, async (response) => {
       btnScan.disabled = false;
       btnScan.innerHTML = '<span class="btn-icon">⚡</span> Scan & Sanitize';
 
@@ -180,6 +272,13 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
 
       if (response && response.success) {
+        await observabilityLogger.log(
+          'REDACTION',
+          'SUCCESS',
+          `Scanned & redacted ${response.report?.totalRedacted || 0} sensitive entities`,
+          `Tokens: ${JSON.stringify(response.report?.entitiesByType || {})}`,
+          response.report?.durationMs
+        );
         refreshStatus();
       } else {
         alert(response?.error || 'Could not sanitize active tab. Please refresh the page (F5).');
@@ -192,14 +291,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     const tab = await getActiveTab();
     if (!tab || !tab.id) return;
 
-    chrome.tabs.sendMessage(tab.id, { type: 'RESTORE_ORIGINAL_DOM' }, (response) => {
+    chrome.tabs.sendMessage(tab.id, { type: 'RESTORE_ORIGINAL_DOM' }, async (response) => {
       if (response && response.success) {
+        await observabilityLogger.log('SECURITY', 'INFO', 'DOM and Canvases rolled back to unredacted state');
         refreshStatus();
       }
     });
   });
 
-  // Zero-AI Deterministic Execution
+  // Zero-AI Deterministic Execution (with Smart Real-World URL Navigation)
   const zeroAiInput = document.getElementById('zero-ai-input') as HTMLInputElement;
   const btnZeroAiRun = document.getElementById('btn-zero-ai-run') as HTMLButtonElement;
   const zeroAiStatus = document.getElementById('zero-ai-status') as HTMLElement;
@@ -214,14 +314,49 @@ window.addEventListener('DOMContentLoaded', async () => {
     btnZeroAiRun.disabled = true;
     zeroAiStatus.textContent = `⚡ Executing: "${cmd}"...`;
 
+    // 1. Smart Real-World Domain & Website Navigation Resolver
+    // Handles commands like "wikipedia", "google", "go to github.com", "open isro.gov.in" directly!
+    const navMatch = cmd.match(/^(?:go\s+to|open|navigate\s+to|visit)\s+(.+)$/i);
+    const candidateTarget = (navMatch ? navMatch[1] : cmd).trim();
+
+    const domainShortcuts: Record<string, string> = {
+      'wikipedia': 'https://en.wikipedia.org',
+      'google': 'https://www.google.com',
+      'github': 'https://github.com',
+      'isro': 'https://www.isro.gov.in',
+      'eprocure': 'https://eprocure.gov.in',
+      'incometax': 'https://www.incometax.gov.in',
+      'youtube': 'https://www.youtube.com'
+    };
+
+    const isUrl = /^(https?:\/\/|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/i.test(candidateTarget);
+    const shortcutMatch = domainShortcuts[candidateTarget.toLowerCase()];
+
+    if (shortcutMatch || isUrl || navMatch) {
+      let targetUrl = shortcutMatch || candidateTarget;
+      if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+        targetUrl = 'https://' + targetUrl;
+      }
+
+      await observabilityLogger.log('NAVIGATOR', 'SUCCESS', `Dispatched navigation to ${targetUrl}`, `Command: "${cmd}"`, 0);
+      zeroAiStatus.textContent = `✔ Navigating to ${targetUrl}...`;
+      await chrome.tabs.update(tab.id, { url: targetUrl });
+      btnZeroAiRun.disabled = false;
+      renderLogs();
+      return;
+    }
+
+    // 2. In-Page Command Execution (Search, Click, Fill on current page)
     const check = await ensureContentScriptLoaded(tab.id, tab.url);
     if (!check.ok) {
       btnZeroAiRun.disabled = false;
       zeroAiStatus.textContent = check.reason || 'Could not connect to active page.';
+      await observabilityLogger.log('NAVIGATOR', 'WARN', `Command skipped: page is internal`, check.reason);
+      renderLogs();
       return;
     }
 
-    chrome.tabs.sendMessage(tab.id, { type: 'RUN_DETERMINISTIC_COMMAND', command: cmd }, (response) => {
+    chrome.tabs.sendMessage(tab.id, { type: 'RUN_DETERMINISTIC_COMMAND', command: cmd }, async (response) => {
       btnZeroAiRun.disabled = false;
       if (chrome.runtime.lastError) {
         zeroAiStatus.textContent = `Error: ${chrome.runtime.lastError.message}`;
@@ -229,9 +364,12 @@ window.addEventListener('DOMContentLoaded', async () => {
       }
       if (response && response.success) {
         zeroAiStatus.textContent = `✔ ${response.message}`;
+        await observabilityLogger.log('NAVIGATOR', 'SUCCESS', response.message, `Command: "${cmd}"`, response.latencyMs);
         refreshStatus();
       } else {
         zeroAiStatus.textContent = `❌ ${response?.message || 'Action failed.'}`;
+        await observabilityLogger.log('NAVIGATOR', 'WARN', response?.message || 'Action failed', `Command: "${cmd}"`, response?.latencyMs);
+        renderLogs();
       }
     });
   }
@@ -248,6 +386,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (tab?.id) {
       await ensureContentScriptLoaded(tab.id, tab.url);
       chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_SPOTLIGHT' });
+      await observabilityLogger.log('PERCEPTION', 'INFO', 'Toggled Floating Spotlight HUD (Ctrl+Shift+K)');
       window.close();
     }
   });
@@ -255,6 +394,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Dock to Persistent Chrome Side Panel
   const btnDockSidepanel = document.getElementById('btn-dock-sidepanel') as HTMLButtonElement;
   btnDockSidepanel?.addEventListener('click', async () => {
+    await observabilityLogger.log('PERCEPTION', 'INFO', 'Docked SentryAgent to native Chrome Side Panel');
     chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }, () => {
       window.close();
     });
@@ -265,4 +405,5 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 
   refreshStatus();
+  renderLogs();
 });

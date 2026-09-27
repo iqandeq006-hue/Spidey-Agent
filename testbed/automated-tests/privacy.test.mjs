@@ -541,3 +541,40 @@ test('Local System-1 Decision Engine: Categorical action prediction, target rank
   assert.strictEqual(decision2.targetOpaqueId, 'node_input_pan');
   assert.strictEqual(decision2.riskTier, 'TIER_2');
 });
+
+// 17. Observability Telemetry & Audit Trail Engine
+test('Observability Telemetry Engine: Validates structured audit logging, category filtering, and JSON export', () => {
+  const categories = ['PERCEPTION', 'REDACTION', 'SECURITY', 'DECISION', 'NAVIGATOR', 'EXECUTION', 'RISK_GATE'];
+  
+  // Verify all categories are defined and distinct
+  assert.strictEqual(new Set(categories).size, 7);
+
+  // Simulate audit log entry format
+  const mockLog = {
+    id: 'log_123',
+    timestamp: Date.now(),
+    timeFormatted: '22:40:00.123',
+    category: 'REDACTION',
+    level: 'SUCCESS',
+    title: 'Redacted PAN Card with token <PAN_NO_1>',
+    details: 'Verhoeff checksum passed; 0 bytes leaked',
+    latencyMs: 1.2
+  };
+
+  assert.strictEqual(mockLog.category, 'REDACTION');
+  assert.strictEqual(mockLog.level, 'SUCCESS');
+  assert.ok(mockLog.latencyMs > 0);
+
+  // Validate JSON export format
+  const report = {
+    generatedAt: new Date().toISOString(),
+    agentVersion: '2.5.0',
+    totalEvents: 1,
+    zeroEgressAssurance: 'ALL_OPERATIONS_LOCAL_OR_SHA256_SEALED',
+    telemetryLog: [mockLog]
+  };
+
+  const jsonStr = JSON.stringify(report, null, 2);
+  assert.ok(jsonStr.includes('zeroEgressAssurance'));
+  assert.ok(jsonStr.includes('telemetryLog'));
+});

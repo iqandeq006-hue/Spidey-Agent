@@ -80,8 +80,38 @@
       </div>
     </div>
 
-    <!-- Local Inversion Vault Inspector -->
-    <div class="vault-section">
+    <!-- Tab Switcher Bar: Observability Logs vs Vault -->
+    <div class="tab-switch-bar">
+      <button class="tab-btn active" id="tab-btn-logs">
+        <span>📜 Live Telemetry Logs</span>
+      </button>
+      <button class="tab-btn" id="tab-btn-vault">
+        <span>🔐 Inversion Vault</span>
+      </button>
+    </div>
+
+    <!-- Panel 1: Observability Log Console -->
+    <div class="vault-section" id="panel-logs">
+      <div class="log-filter-bar">
+        <div class="filter-chips">
+          <button class="filter-chip active" data-filter="ALL">All</button>
+          <button class="filter-chip" data-filter="SECURITY">Security</button>
+          <button class="filter-chip" data-filter="DECISION">Decision</button>
+          <button class="filter-chip" data-filter="PERCEPTION">Vision</button>
+          <button class="filter-chip" data-filter="EXECUTION">Exec</button>
+        </div>
+        <div class="log-actions-bar">
+          <button class="log-btn-small" id="btn-export-logs" title="Export audit trail as JSON">📥 Export</button>
+          <button class="log-btn-small" id="btn-clear-logs" title="Clear log history">↺ Clear</button>
+        </div>
+      </div>
+      <div class="log-list" id="log-list">
+        <div class="log-empty">Telemetry stream ready. Actions will log here in real time.</div>
+      </div>
+    </div>
+
+    <!-- Panel 2: Local Inversion Vault Inspector -->
+    <div class="vault-section" id="panel-vault" style="display: none;">
       <div class="vault-header">
         <span class="section-title">Local Inversion Vault</span>
         <span class="badge" id="vault-count-badge">0 Active</span>
