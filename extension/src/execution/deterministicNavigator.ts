@@ -333,29 +333,44 @@ export class DeterministicNavigator {
     };
   }
 
-  // Structural Heuristic Search Box Locator
-  private locateSearchInput(): HTMLInputElement | null {
+  // Structural Heuristic Search Box Locator across real-world web domains
+  private locateSearchInput(): HTMLInputElement | HTMLTextAreaElement | null {
     // 1. Explicit search input
     const typeSearch = document.querySelector<HTMLInputElement>('input[type="search"]');
-    if (typeSearch) return typeSearch;
+    if (typeSearch && this.isElementVisible(typeSearch)) return typeSearch;
 
-    // 2. Input with search attributes
-    const attrSearch = document.querySelector<HTMLInputElement>(
-      'input[name*="search" i], input[id*="search" i], input[placeholder*="search" i], input[aria-label*="search" i]'
+    // 2. High-profile search elements (Google, Wikipedia, Amazon, YouTube, GitHub, portals)
+    const knownSearch = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      'textarea[name="q" i], input[name="q" i], input#searchInput, input#search, input#twotabsearchtextbox, input[name="query" i], input[id*="search" i]'
     );
-    if (attrSearch) return attrSearch;
+    if (knownSearch && this.isElementVisible(knownSearch)) return knownSearch;
 
-    // 3. Input inside a search form or role="search"
-    const roleSearch = document.querySelector<HTMLInputElement>(
-      '[role="search"] input:not([type="hidden"]), form[action*="search" i] input:not([type="hidden"])'
+    // 3. Elements with search attributes
+    const attrSearch = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      'input[name*="search" i], textarea[name*="search" i], input[placeholder*="search" i], textarea[placeholder*="search" i], input[aria-label*="search" i], textarea[aria-label*="search" i]'
     );
-    if (roleSearch) return roleSearch;
+    if (attrSearch && this.isElementVisible(attrSearch)) return attrSearch;
 
-    // 4. Fallback: single primary text input on page
-    const allInputs = document.querySelectorAll<HTMLInputElement>('input[type="text"], input:not([type])');
+    // 4. Input inside a search form or role="search"
+    const roleSearch = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      '[role="search"] input:not([type="hidden"]), [role="search"] textarea, form[action*="search" i] input:not([type="hidden"])'
+    );
+    if (roleSearch && this.isElementVisible(roleSearch)) return roleSearch;
+
+    // 5. Fallback: single primary text input or textarea on page
+    const allInputs = Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      'input[type="text"], input:not([type]), textarea'
+    )).filter(el => this.isElementVisible(el));
+
     if (allInputs.length === 1) return allInputs[0];
 
     return null;
+  }
+
+  private isElementVisible(el: HTMLElement): boolean {
+    const rect = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
   }
 
   // Fast Levenshtein-based similarity (0.0 to 1.0)
