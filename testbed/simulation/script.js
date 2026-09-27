@@ -64,8 +64,14 @@ function switchPortal(portalId) {
     document.getElementById('tab-mission').classList.add('active');
     document.getElementById('portal-mission').classList.add('active');
     document.getElementById('active-portal-badge').textContent = 'ISTRAC Mission Ops';
-    renderSatelliteCanvas();
-    renderDirectorAvatarCanvas();
+    const satCanvas = document.getElementById('satellite-telemetry-canvas');
+    if (!satCanvas || !satCanvas.hasAttribute('data-sentry-redacted')) {
+      renderSatelliteCanvas();
+    }
+    const dirCanvas = document.getElementById('director-avatar-canvas');
+    if (!dirCanvas || !dirCanvas.hasAttribute('data-sentry-redacted')) {
+      renderDirectorAvatarCanvas();
+    }
   }
 
   updateFieldCounts();

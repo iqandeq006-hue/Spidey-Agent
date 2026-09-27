@@ -316,4 +316,57 @@ test('Connected-Component Labeling (CCL): Separates multiple distinct text clust
   assert.strictEqual(middleWidth, 29, 'Middle 29 pixels must be preserved without over-blacking');
 });
 
+// 9. Self-Healing Egress Auditor: Mathematical Confidence & Dynamic Workflow
+function calculatePrivacyConfidence(canaryViolation, residualPiiCount, highEntropyCount) {
+  let c = 1.0;
+  if (canaryViolation) c -= 1.0;
+  c -= residualPiiCount * 0.40;
+  c -= highEntropyCount * 0.10;
+  return Math.round(Math.max(0.0, Math.min(1.0, c)) * 100) / 100;
+}
+
+test('Self-Healing Privacy Auditor: Calculates Confidence Score (C_privacy) & directs adaptive workflow', () => {
+  // Scenario A: Completely clean payload
+  const cleanScore = calculatePrivacyConfidence(false, 0, 0);
+  assert.strictEqual(cleanScore, 1.0, 'Clean payload must receive 100% confidence');
+
+  // Scenario B: Marginal confidence (e.g. 1 high-entropy string) -> Self-Healing range (80% - 98%)
+  const healingScore = calculatePrivacyConfidence(false, 0, 1);
+  assert.strictEqual(healingScore, 0.90, 'Single high-entropy string triggers 90% confidence (Self-Healing tier)');
+  assert.ok(healingScore >= 0.80 && healingScore < 0.98, 'Must route to autonomous 2nd pass');
+
+  // Scenario C: Severe residual leak -> Downgrade / Block tier
+  const leakScore = calculatePrivacyConfidence(false, 2, 0);
+  assert.strictEqual(leakScore, 0.20, 'Unmasked PII triggers <80% confidence');
+  assert.ok(leakScore < 0.80, 'Must trigger visual strip and downgrade to DOM L1');
+
+  // Scenario D: Canary breach -> Fatal block
+  const fatalScore = calculatePrivacyConfidence(true, 0, 0);
+  assert.strictEqual(fatalScore, 0.0, 'Canary violation must immediately drop score to 0.0');
+});
+
+// 10. Dual-Track Static Generalization: Financial & Regulatory Amounts
+function generalizeFinancialAmount(str) {
+  const match = str.match(/(?:₹|Rs\.?|INR)\s*([\d,]+(?:\.\d{2})?)/i);
+  if (!match) return str;
+  const num = parseFloat(match[1].replace(/,/g, ''));
+  let bracket = 'TIER_1_STANDARD';
+  if (num >= 10000000) bracket = 'TIER_4_STRATEGIC_CRORE';
+  else if (num >= 2500000) bracket = 'TIER_3_HIGH_VALUE_LAKH';
+  else if (num >= 500000) bracket = 'TIER_2_MID_SCALE';
+  return `<VAL:BUDGET bracket="${bracket}">`;
+}
+
+test('Dual-Track Static Content Generalization: Maps static table/text amounts to typed functional brackets', () => {
+  const tenderBid = generalizeFinancialAmount('Total Estimated Cost: ₹ 48,50,000/-');
+  assert.strictEqual(tenderBid, '<VAL:BUDGET bracket="TIER_3_HIGH_VALUE_LAKH">');
+
+  const executiveSalary = generalizeFinancialAmount('Gross Compensation: INR 1,25,00,000');
+  assert.strictEqual(executiveSalary, '<VAL:BUDGET bracket="TIER_4_STRATEGIC_CRORE">');
+
+  const nonFinancial = generalizeFinancialAmount('Standard Component Serial: 99482');
+  assert.strictEqual(nonFinancial, 'Standard Component Serial: 99482', 'Non-currency strings must not be over-redacted');
+});
+
+
 

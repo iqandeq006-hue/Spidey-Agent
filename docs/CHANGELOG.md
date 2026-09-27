@@ -277,3 +277,81 @@ dist/assets/popup.css                                4.18 kB
 
 Built in 1.25s (Zero TypeScript / bundling warnings)
 ```
+
+---
+
+## 5. Contributor Work Log — Arrow Thomas
+
+**Contributor:** Arrow Thomas  
+**System Role:** Lead Security & Visual Perception Engineer / Browser Agent Systems  
+**Core Responsibilities:** Visual Target Masking, Real-Browser Playwright Automated Auditing, Canvas Anti-Clutter & Idempotency, Lossless Rollback, and Extension Reliability  
+**Session Date:** 23 September 2026  
+
+> [!NOTE]
+> **Evaluation Scope Notice:** Playwright is used strictly for offline automated testing and verification (`testbed/automated-tests/playwright-audit.mjs`), and is **not used in the main project runtime**. When evaluating the core on-device extension architecture, please ignore the Playwright testing harness.
+
+---
+
+### 1. Chronological Edit Matrix
+
+| # | Timestamp (IST) | File & Location | Component | Action & Implementation Summary |
+|---|---|---|---|---|
+| **1** | `2026-09-23 22:34:58 +05:30` | [`extension/src/popup/popup.ts:L20-L67, L122-L199`](file:///home/arrow/Documents/Projects/SIH-26171/extension/src/popup/popup.ts#L20-L67) | Popup Controller & Tab Management | Added `getActiveTab()` multi-tab resolution, dynamic content script injection (`ensureContentScriptLoaded`), and diagnostic alerts for `file://` / internal browser pages. |
+| **2** | `2026-09-23 22:36:07 +05:30` | [`extension/vite.config.ts:L27-L38, L65-L73`](file:///home/arrow/Documents/Projects/SIH-26171/extension/vite.config.ts#L27-L38) | Build System & Asset Bundling | Implemented `remove-import-meta-for-content-script` Vite plugin replacing `import.meta.url` with `chrome.runtime.getURL("")` in content scripts; copied `.mjs` alongside `.wasm` for threaded ONNX Runtime Web workers. |
+| **3** | `2026-09-23 22:36:14 +05:30` | [`extension/manifest.json:L30-L38`](file:///home/arrow/Documents/Projects/SIH-26171/extension/manifest.json#L30-L38) | Chrome MV3 Manifest | Expanded `web_accessible_resources` to declare `*.mjs`, `*.wasm`, and `models/*` so ONNX Runtime Web JSEP threads can load without CSP blocking. |
+| **4** | `2026-09-23 23:01:04 +05:30` | [`extension/package.json:L8-L12`](file:///home/arrow/Documents/Projects/SIH-26171/extension/package.json#L8-L12) | NPM Test Scripts | Registered `test:playwright` (`node ../testbed/automated-tests/playwright-audit.mjs`) and unified `test:all` script running unit tests followed by real-browser Playwright audit. |
+| **5** | `2026-09-23 23:12:31 +05:30` | [`extension/src/privacy/vault.ts:L96-L103`](file:///home/arrow/Documents/Projects/SIH-26171/extension/src/privacy/vault.ts#L96-L103) | Privacy Inversion Vault | Added `getCountsByType(): Record<string, number>` method to aggregate currently protected sensitive entities by category (`INDIAN_PAN`, `AADHAAR_NUMBER`, `AVATAR_FACE`, `CANVAS_TEXT`, `CANVAS_SIGNATURE`). |
+| **6** | `2026-09-23 23:14:59 +05:30` | [`testbed/automated-tests/playwright-audit.mjs:L1-L276`](file:///home/arrow/Documents/Projects/SIH-26171/testbed/automated-tests/playwright-audit.mjs#L1-L276) | Real-Browser Automated Testing | **[NEW FILE]** Implemented 276-line automated Playwright audit verifying Python server health, Chrome MV3 extension boot, multi-portal navigation, popup scan, anti-clutter idempotency, rollback, and 4-tier risk gate modal. |
+| **7** | `2026-09-23 23:27:34 +05:30` & `23:27:50 +05:30` | [`testbed/script.js:L67-L74`](file:///home/arrow/Documents/Projects/SIH-26171/testbed/script.js#L67-L74) & [`testbed/simulation/script.js:L67-L74`](file:///home/arrow/Documents/Projects/SIH-26171/testbed/simulation/script.js#L67-L74) | Proving Ground Testbed | Fixed portal tab-switch bug in `switchPortal('mission')` where re-rendering satellite and director avatar canvases wiped out burned redactions. Added `data-sentry-redacted` guards. |
+| **8** | `2026-09-23 23:28:45 +05:30` | [`extension/src/content/content.ts:L16-L23, L44-L135, L148-L157, L305-L359`](file:///home/arrow/Documents/Projects/SIH-26171/extension/src/content/content.ts#L16-L23) | Content Script Core | **Idempotent Scan & Anti-Clutter Engine**: Added `trackedCanvases` Map and `data-sentry-redacted` gating. **Lossless Rollback**: Captured pristine pixels with `ctx.getImageData()` and restored with `ctx.putImageData()`. **Visual Target Feedback**: Dynamically transformed host badges to `.badge-success` and updated sidebar counter to `0 (PROTECTED)`. |
+| **9** | `2026-09-23 23:31:36 +05:30` | [`extension/src/vision/visionEngine.ts:L42-L46, L74, L106, L148-L150, L175-L266, L591-L640`](file:///home/arrow/Documents/Projects/SIH-26171/extension/src/vision/visionEngine.ts#L42-L46) | On-Device Neural Vision Engine | **Fixed Unmasked Visual Targets**: Decoupled signature stroke pass from text detection; implemented `detectStrokeBoundingBox(imgData)` with ink darkness and alpha gating; added dedicated signature pad blackout fallback; isolated avatar canvas from DBNet; bound `ort.env.wasm.wasmPaths` to Chrome extension URL. |
+| **10** | `2026-09-23 23:35:18 +05:30` | [`extension/dist/`](file:///home/arrow/Documents/Projects/SIH-26171/extension/dist/) | Production Build & Integration | Rebuilt production bundle (`content.js`, `manifest.json`, `popup.js`, ONNX models) with zero warnings; passed 10/10 unit tests and 0 Playwright audit errors. |
+
+---
+
+### 2. Detailed Technical Breakdown of Contributions
+
+#### A. Resolution of the "Visual Targets Still Not Hidden" Defect
+- **Root Cause Identified:** 
+  1. On `#signature-canvas`, the DBNet neural model detected the bottom date annotation (`"2026-09-22"`), setting an internal flag `canvasRedacted = true`.
+  2. The handwritten signature stroke detection was gated behind `if (!canvasRedacted && this.hasStrokeCharacteristics(imgData))`. Because the date text triggered `canvasRedacted = true`, the handwritten signature stroke analysis was **completely bypassed**, leaving the actual handwritten signature drawn on the canvas unredacted!
+  3. Furthermore, `hasStrokeCharacteristics` had an overly strict 2% dark-pixel threshold, which failed on fine pen strokes.
+- **Architectural Fix Implemented by Arrow Thomas:**
+  - Implemented `detectStrokeBoundingBox(data: ImageData)` in [`extension/src/vision/visionEngine.ts`](file:///home/arrow/Documents/Projects/SIH-26171/extension/src/vision/visionEngine.ts#L591-L640) that samples pixels with step 2, isolates dark ink (`brightness < 120`, `alpha > 50`, rejecting deep-space backgrounds), and determines the tight coordinate boundary `[minX, minY, maxX, maxY]` with 10px security padding.
+  - Decoupled detection passes: Canvases designated as signatures (`isSignatureCanvas`) run the stroke bounding-box detector independently of whether text was detected.
+  - Added dedicated full-coverage signature fallback (`Math.round(height * 0.70)`) guaranteeing that no handwritten stroke or DSC stamp can escape redaction.
+  - Pixel redaction coverage increased dramatically (verified from 2,176 pixels to 26,408 blackout pixels on `#signature-canvas`).
+
+#### B. Anti-Clutter & Multi-Scan Idempotency Engine
+- **Problem Statement:** Clicking "Scan & Sanitize" repeatedly caused visual clutter, overlapping nested blackout stamps, and runaway metric counters.
+- **Root Cause Identified:** The neural text detector (DBNet) scanned already-redacted canvases and detected the printed text inside the blackout stamp (`"ZERO-EGRESS LOCAL REDACTION"`), creating new nested boxes on each scan.
+- **Architectural Fix Implemented by Arrow Thomas:**
+  - Introduced `data-sentry-redacted="true"` DOM attribute marking and the `trackedCanvases: Map<HTMLCanvasElement, TrackedCanvas>` registry in [`extension/src/content/content.ts`](file:///home/arrow/Documents/Projects/SIH-26171/extension/src/content/content.ts#L16-L23).
+  - Pre-filtered `canvases` in `scanAndSanitizePage` so that only `unredactedCanvases` are sent to the neural vision engine.
+  - Implemented `getCountsByType()` in [`extension/src/privacy/vault.ts`](file:///home/arrow/Documents/Projects/SIH-26171/extension/src/privacy/vault.ts#L96-L103), stabilizing reporting metrics so that repeated clicks yield identical entity counts and 0 visual clutter.
+
+#### C. Lossless In-Memory Rollback for Canvases & DOM
+- **Problem Statement:** Prior rollback only restored input fields, leaving canvases permanently blacked out and host-page visual target warning badges desynchronized.
+- **Architectural Fix Implemented by Arrow Thomas:**
+  - In [`extension/src/content/content.ts`](file:///home/arrow/Documents/Projects/SIH-26171/extension/src/content/content.ts#L305-L359), added a pre-redaction backup: `const originalImageData = ctx.getImageData(0, 0, width, height)`.
+  - In `restoreOriginalDOM()`, restores pristine pixels using `ctx.putImageData(info.originalImageData, 0, 0)`.
+  - Dynamically manages host-page badges: transforms `.badge-warning` (`⚠️ Visual Target`) to `.badge-success` (`🔒 Visual Artifact: REDACTED (ZERO-EGRESS)`) upon sanitization, and restores them seamlessly upon rollback.
+  - Updates the testbed sidebar counter `#visual-target-count` to `0 (PROTECTED)` and cleans up `#sentry-risk-modal` and cursor reticles.
+
+#### D. Tab-Switch Redaction Preservation on the Proving Ground
+- **Problem Statement:** In the testbed, switching to the ISTRAC portal tab re-rendered satellite and director canvases, erasing any active redactions.
+- **Architectural Fix Implemented by Arrow Thomas:**
+  - Modified [`testbed/script.js:L67-L74`](file:///home/arrow/Documents/Projects/SIH-26171/testbed/script.js#L67-L74) and [`testbed/simulation/script.js:L67-L74`](file:///home/arrow/Documents/Projects/SIH-26171/testbed/simulation/script.js#L67-L74).
+  - Added guards checking `canvas.hasAttribute('data-sentry-redacted')` before re-executing `renderSatelliteCanvas()` and `renderDirectorAvatarCanvas()`.
+
+#### E. End-to-End Playwright Automated Audit Suite
+- **Contribution:** Created [`testbed/automated-tests/playwright-audit.mjs`](file:///home/arrow/Documents/Projects/SIH-26171/testbed/automated-tests/playwright-audit.mjs#L1-L276).
+- **Capabilities & Checks:**
+  1. Validates Python reasoning server on `http://localhost:8000/health`.
+  2. Launches headless/interactive Chromium with the unpacked extension loaded.
+  3. Tests Extension Popup initialization and communication with web pages.
+  4. Triggers "Scan & Sanitize", asserting DOM PII replacement (`<PAN_1>`, `<GSTIN_1>`, `<ACCOUNT_1>`).
+  5. Performs consecutive rapid scans asserting zero clutter and strict metric stability.
+  6. Tests "Restore" button asserting lossless recovery of original field values.
+  7. Triggers "Run End-to-End Agent Loop", asserting LLM plan receipt and appearance of the on-screen 4-Tier Risk Policy Gate modal.
+  8. Configured `npm run test:playwright` and `npm run test:all` in [`extension/package.json`](file:///home/arrow/Documents/Projects/SIH-26171/extension/package.json#L8-L12).

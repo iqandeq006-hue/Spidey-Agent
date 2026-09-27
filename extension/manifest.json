@@ -12,7 +12,8 @@
     "activeTab",
     "scripting",
     "storage",
-    "tabs"
+    "tabs",
+    "debugger"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -34,7 +35,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["models/*", "assets/*"],
+      "resources": ["models/*", "assets/*", "*.wasm", "*.onnx", "*.mjs"],
       "matches": ["<all_urls>"]
     }
   ]

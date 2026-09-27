@@ -93,6 +93,15 @@ export class LocalInversionVault {
     return list;
   }
 
+  // Get aggregated counts of protected entities grouped by type
+  public getCountsByType(): Record<string, number> {
+    const counts: Record<string, number> = {};
+    for (const entry of this.vault.values()) {
+      counts[entry.type] = (counts[entry.type] || 0) + 1;
+    }
+    return counts;
+  }
+
   // Helper: mask sensitive values for safe visual verification
   private maskForPreview(val: string, type: PIIType): string {
     if (val.length <= 4) return '••••';

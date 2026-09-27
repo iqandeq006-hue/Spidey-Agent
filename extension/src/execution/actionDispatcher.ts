@@ -17,6 +17,7 @@ export interface PlannedAction {
 }
 
 import { cursorReticleInstance } from './cursorReticle';
+import { cdpDispatcherInstance } from './cdpDispatcher';
 
 export class ActionDispatcher {
   // Map of opaque node ID -> Live DOM Element
@@ -56,15 +57,11 @@ export class ActionDispatcher {
     // Rehydrate values locally if the action involves typing or submitting
     if (action.action === 'TYPE' && action.payloadValue) {
       const realValue = vaultInstance.rehydrate(action.payloadValue);
-      if ('value' in targetEl) {
-        (targetEl as HTMLInputElement).value = realValue;
-        targetEl.dispatchEvent(new Event('input', { bubbles: true }));
-        targetEl.dispatchEvent(new Event('change', { bubbles: true }));
-      }
+      await cdpDispatcherInstance.hardwareType(0, realValue, targetEl);
     } else if (action.action === 'CLICK') {
       // Prior to clicking a submit button, ensure all fields are locally re-hydrated
       targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      targetEl.click();
+      await cdpDispatcherInstance.hardwareClick(0, centerX, centerY, targetEl);
     } else if (action.action === 'FOCUS') {
       targetEl.focus();
     }

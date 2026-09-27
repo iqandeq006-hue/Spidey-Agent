@@ -3,7 +3,11 @@ import { vaultInstance } from '../privacy/vault';
 import { visionEngineInstance } from '../vision/visionEngine';
 import { egressVerifierInstance, OpaqueSceneNode } from '../network/egressVerifier';
 import { actionDispatcherInstance, PlannedAction } from '../execution/actionDispatcher';
+import { cursorReticleInstance } from '../execution/cursorReticle';
 import { PIIType, SanitizationReport } from '../types';
+import { spatialClassifierInstance } from '../vision/spatialClassifier';
+import { staticContentGeneralizerInstance } from '../privacy/staticContentGeneralizer';
+import { selfHealingAuditorInstance } from '../network/selfHealingAuditor';
 
 interface TrackedElement {
   element: HTMLInputElement | HTMLTextAreaElement | HTMLElement;
@@ -12,7 +16,14 @@ interface TrackedElement {
   type: PIIType;
 }
 
+interface TrackedCanvas {
+  canvas: HTMLCanvasElement;
+  originalImageData: ImageData;
+  regions: any[];
+}
+
 const trackedElements: Map<string, TrackedElement> = new Map();
+const trackedCanvases: Map<HTMLCanvasElement, TrackedCanvas> = new Map();
 let isCurrentlySanitized = false;
 
 // Minimum-Disclosure Ladder Policy Engine
@@ -36,11 +47,15 @@ export async function scanAndSanitizePage(
   disclosureLevel: 'L0' | 'L1' | 'L2' | 'L3' | 'AUTO' = 'AUTO'
 ): Promise<SanitizationReport> {
   const startTime = performance.now();
-  let redactedCount = 0;
+  let newRedactedCount = 0;
   const entitiesByType: Record<string, number> = {};
   const tokens: string[] = [];
 
   actionDispatcherInstance.clearRegistry();
+
+  // 0. Macro Spatial Layout & Domain Classification (2ms)
+  const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas');
+  const spatialResult = await spatialClassifierInstance.classifyScreen(Array.from(canvases));
 
   // A. Scan Form Inputs & Textareas (Track 1)
   const inputElements = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
@@ -51,6 +66,7 @@ export async function scanAndSanitizePage(
     const rawVal = input.value;
     if (!rawVal || rawVal.trim().length === 0) return;
 
+    // If this field is already tokenized, skip it
     if (vaultInstance.isToken(rawVal)) return;
 
     const match = classifySensitiveText(rawVal);
@@ -72,49 +88,105 @@ export async function scanAndSanitizePage(
       input.value = token;
       input.classList.add('sentry-redacted-field');
 
-      redactedCount++;
+      newRedactedCount++;
       entitiesByType[match.type] = (entitiesByType[match.type] || 0) + 1;
       tokens.push(token);
     }
   });
 
+  // A.2. Scan & Generalize Static Content & Artifacts (Track 1B: Tables, spans, and paragraphs)
+  const staticResult = staticContentGeneralizerInstance.scanAndGeneralizeStaticText();
+  newRedactedCount += staticResult.count;
+  tokens.push(...staticResult.tokens);
+
   // B. Run On-Device Vision Engine (Track 2: Gated by Minimum-Disclosure Ladder)
   let visualRegions: any[] = [];
-  const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas');
   const activeLevel = determineDisclosureLevel(canvases.length, disclosureLevel);
 
-  if (canvases.length > 0 && activeLevel !== 'L1') {
-    console.log(`[SentryAgent] Minimum-Disclosure Ladder dynamically escalated to ${activeLevel} (${canvases.length} canvas element(s) detected). Running BlazeFace & DBNet neural vision...`);
-    visualRegions = await visionEngineInstance.scanCanvases(canvases);
+  // Filter to unredacted canvases ONLY to prevent double-burning, nested boxes, and visual clutter
+  const unredactedCanvases: HTMLCanvasElement[] = [];
+  canvases.forEach((canvas) => {
+    if (!trackedCanvases.has(canvas) && canvas.getAttribute('data-sentry-redacted') !== 'true') {
+      unredactedCanvases.push(canvas);
+    }
+  });
+
+  if (unredactedCanvases.length > 0 && activeLevel !== 'L1') {
+    console.log(`[SentryAgent] Minimum-Disclosure Ladder dynamically escalated to ${activeLevel} (${unredactedCanvases.length} unredacted canvas(es) detected). Running BlazeFace & DBNet neural vision...`);
+    
+    // Backup pristine image data BEFORE burning any pixel redactions
+    for (const canvas of unredactedCanvases) {
+      try {
+        const ctx = canvas.getContext('2d');
+        if (ctx && canvas.width > 0 && canvas.height > 0) {
+          const originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          trackedCanvases.set(canvas, { canvas, originalImageData, regions: [] });
+        }
+      } catch (backupErr) {
+        console.warn('[SentryAgent] Canvas snapshot failed (tainted canvas):', backupErr);
+      }
+    }
+
+    visualRegions = await visionEngineInstance.scanCanvases(unredactedCanvases);
 
     visualRegions.forEach((reg) => {
       const piiType: PIIType = reg.type === 'FACE' 
         ? 'AVATAR_FACE' 
         : (reg.type === 'TEXT_REGION' ? 'CANVAS_TEXT' : 'CANVAS_SIGNATURE');
       vaultInstance.tokenize(`[VISUAL_BUFFER_${reg.id}]`, piiType);
-      redactedCount++;
+      newRedactedCount++;
       entitiesByType[reg.type] = (entitiesByType[reg.type] || 0) + 1;
       tokens.push(reg.token);
     });
-  } else if (canvases.length > 0) {
+
+    // Mark these canvases as redacted so repeated scans never re-burn them
+    unredactedCanvases.forEach((canvas) => {
+      canvas.setAttribute('data-sentry-redacted', 'true');
+      canvas.classList.add('sentry-redacted-canvas');
+    });
+
+    // Update visual target badges and counter on host page for unmistakable visual verification
+    document.querySelectorAll('.badge-warning').forEach((badge) => {
+      const text = badge.textContent || '';
+      if (text.includes('Visual') || text.includes('Target') || text.includes('DBNet') || text.includes('BlazeFace')) {
+        badge.setAttribute('data-sentry-orig-badge', text);
+        badge.classList.remove('badge-warning');
+        badge.classList.add('badge-success', 'sentry-redacted-badge');
+        badge.textContent = '🔒 Visual Artifact: REDACTED (ZERO-EGRESS)';
+      }
+    });
+
+    const visualCountEl = document.getElementById('visual-target-count');
+    if (visualCountEl) {
+      if (!visualCountEl.hasAttribute('data-sentry-orig-count')) {
+        visualCountEl.setAttribute('data-sentry-orig-count', visualCountEl.textContent || '1');
+      }
+      visualCountEl.innerHTML = `0 <span style="font-size: 11px; color: #10b981; font-weight: normal;">(PROTECTED)</span>`;
+    }
+  } else if (canvases.length > 0 && activeLevel === 'L1') {
     console.log(`[SentryAgent] Minimum-Disclosure Notice: ${canvases.length} canvas(es) present but disclosure level constrained to ${activeLevel}. Vision pipeline skipped.`);
   }
 
   isCurrentlySanitized = true;
   injectSentryStyles();
 
+  // Aggregate consistent report across all currently protected elements
+  const allVaultEntries = vaultInstance.getInspectionEntries();
+  const allTokens = allVaultEntries.map(e => e.token);
+  const totalCount = vaultInstance.size();
+
   const report: SanitizationReport = {
     url: window.location.href,
     timestamp: Date.now(),
-    redactedCount,
-    entitiesByType,
-    tokens,
+    redactedCount: totalCount,
+    entitiesByType: vaultInstance.getCountsByType(),
+    tokens: allTokens,
     durationMs: Math.round(performance.now() - startTime),
     visualDetectionsCount: visualRegions.length,
     activeDisclosureLevel: activeLevel
   };
 
-  console.log('[SentryAgent] Dual-Track Sanitization completed in', report.durationMs, 'ms. Report:', report);
+  console.log('[SentryAgent] Dual-Track Sanitization completed in', report.durationMs, 'ms. Total protected entities:', totalCount);
   return report;
 }
 
@@ -178,18 +250,19 @@ export async function runAutonomousStep(): Promise<{ success: boolean; message: 
   // Step B: Build Opaque Scene Graph
   const sceneNodes = buildOpaqueSceneGraph();
 
-  // Step C: Fail-Closed Egress Verification (SHA-256 sealed) with active disclosure level
+  // Step C: Self-Healing Privacy Egress Audit (Confidence-scored with dynamic workflow re-arrangement)
   const knownRealValues: string[] = Array.from(trackedElements.values()).map(t => t.originalValue);
-  const sealResult = await egressVerifierInstance.verifyAndSealPayload(
+  const auditResult = await selfHealingAuditorInstance.auditAndDispatch(
     sceneNodes,
     knownRealValues,
-    activeLevel,
-    scanReport.visualDetectionsCount
+    activeLevel
   );
 
-  if (!sealResult.success || !sealResult.payload) {
-    return { success: false, message: sealResult.error || 'Egress verification failed.' };
+  if (auditResult.decision === 'FAIL_CLOSED_BLOCK' || !auditResult.payload) {
+    return { success: false, message: auditResult.reason || 'Egress blocked by Self-Healing Safety Controller.' };
   }
+
+  const outboundPayload = auditResult.payload;
 
   // Step D: Send Sanitized Wire Payload to Remote Reasoner (or local deterministic planner fallback)
   let plannedActions: PlannedAction[] = [];
@@ -198,9 +271,9 @@ export async function runAutonomousStep(): Promise<{ success: boolean; message: 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Sentry-Digest': sealResult.payload.digestSha256
+        'X-Sentry-Digest': outboundPayload.digestSha256
       },
-      body: JSON.stringify(sealResult.payload)
+      body: JSON.stringify(outboundPayload)
     });
 
     if (resp.ok) {
@@ -241,19 +314,64 @@ export async function runAutonomousStep(): Promise<{ success: boolean; message: 
   return { success: true, message: 'Scan complete. No action required.', report: { scanReport } };
 }
 
-// 4. Restore original DOM values (Rollback)
+// 4. Restore original DOM values & Canvas Pixels (Rollback)
 export function restoreOriginalDOM(): void {
+  // A. Rollback DOM Form Input Elements
   for (const [, item] of trackedElements.entries()) {
     if ('value' in item.element) {
       (item.element as HTMLInputElement).value = item.originalValue;
     }
     item.element.classList.remove('sentry-redacted-field');
+    item.element.removeAttribute('data-sentry-idx');
+  }
+
+  // B. Rollback Canvas Pixel Redactions to pristine unredacted state
+  for (const [canvas, info] of trackedCanvases.entries()) {
+    try {
+      const ctx = canvas.getContext('2d');
+      if (ctx && info.originalImageData) {
+        ctx.putImageData(info.originalImageData, 0, 0);
+      }
+    } catch (err) {
+      console.warn('[SentryAgent] Could not restore canvas pixels:', err);
+    }
+    canvas.removeAttribute('data-sentry-redacted');
+    canvas.classList.remove('sentry-redacted-canvas');
+  }
+
+  // B.2. Rollback Static Content Generalizations
+  staticContentGeneralizerInstance.reset();
+
+  // C. Clear any Tactical Sentry HUD reticle or modal overlays
+  cursorReticleInstance.hide();
+  const riskModal = document.getElementById('sentry-risk-modal');
+  if (riskModal) riskModal.remove();
+
+  // D. Restore host page visual target badges and counter
+  document.querySelectorAll('.sentry-redacted-badge').forEach((badge) => {
+    const orig = badge.getAttribute('data-sentry-orig-badge');
+    if (orig) {
+      badge.textContent = orig;
+      badge.removeAttribute('data-sentry-orig-badge');
+    }
+    badge.classList.remove('badge-success', 'sentry-redacted-badge');
+    badge.classList.add('badge-warning');
+  });
+
+  const visualCountEl = document.getElementById('visual-target-count');
+  if (visualCountEl) {
+    const orig = visualCountEl.getAttribute('data-sentry-orig-count');
+    if (orig) {
+      visualCountEl.textContent = orig;
+      visualCountEl.removeAttribute('data-sentry-orig-count');
+    }
   }
 
   isCurrentlySanitized = false;
   vaultInstance.reset();
   trackedElements.clear();
-  console.log('[SentryAgent] Rolled back DOM to original unredacted state.');
+  trackedCanvases.clear();
+  console.log('[SentryAgent] Rolled back DOM and Canvases to pristine unredacted state.');
 }
 
 // 5. Intercept form submissions to ensure safe local re-hydration
@@ -285,6 +403,13 @@ function injectSentryStyles() {
       letter-spacing: -0.2px !important;
       box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15) !important;
     }
+    .sentry-redacted-canvas {
+      outline: 2.5px solid #10b981 !important;
+      outline-offset: 3px !important;
+      border-radius: 4px !important;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.35) !important;
+      transition: all 0.3s ease !important;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -293,9 +418,14 @@ function injectSentryStyles() {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'SCAN_AND_SANITIZE') {
     const requestedLevel = message.disclosureLevel || 'AUTO';
-    scanAndSanitizePage(requestedLevel).then((report) => {
-      sendResponse({ success: true, report });
-    });
+    scanAndSanitizePage(requestedLevel)
+      .then((report) => {
+        sendResponse({ success: true, report });
+      })
+      .catch((err) => {
+        console.error('[SentryAgent] SCAN_AND_SANITIZE error:', err);
+        sendResponse({ success: false, error: err?.message || String(err) });
+      });
     return true; // Keep message channel open for async response
   }
 
@@ -316,9 +446,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'RUN_AUTONOMOUS_STEP') {
-    runAutonomousStep().then((res) => {
-      sendResponse(res);
-    });
+    runAutonomousStep()
+      .then((res) => {
+        sendResponse(res);
+      })
+      .catch((err) => {
+        console.error('[SentryAgent] RUN_AUTONOMOUS_STEP error:', err);
+        sendResponse({ success: false, message: err?.message || String(err) });
+      });
     return true; // Keep message channel open for async response
   }
 

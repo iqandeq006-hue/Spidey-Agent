@@ -39,6 +39,11 @@ export class OnDeviceVisionEngine {
     if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
       this.faceModelUrl = chrome.runtime.getURL('models/blazeface.onnx');
       this.ocrDetModelUrl = chrome.runtime.getURL('models/ocr-det.onnx');
+      try {
+        ort.env.wasm.wasmPaths = chrome.runtime.getURL('');
+      } catch (e) {
+        // ignore in non-browser or mock environments
+      }
     } else {
       this.faceModelUrl = 'models/blazeface.onnx';
       this.ocrDetModelUrl = 'models/ocr-det.onnx';
@@ -65,7 +70,8 @@ export class OnDeviceVisionEngine {
 
         this.faceSession = await ort.InferenceSession.create(this.faceModelUrl, {
           executionProviders: [provider],
-          graphOptimizationLevel: 'all'
+          graphOptimizationLevel: 'all',
+          logSeverityLevel: 3
         });
 
         this.executionProviderUsed = provider as 'webgpu' | 'wasm';
@@ -96,7 +102,8 @@ export class OnDeviceVisionEngine {
 
         this.ocrDetSession = await ort.InferenceSession.create(this.ocrDetModelUrl, {
           executionProviders: [provider],
-          graphOptimizationLevel: 'all'
+          graphOptimizationLevel: 'all',
+          logSeverityLevel: 3
         });
 
         console.log(`[VisionEngine] DBNet text detector loaded successfully on [${provider.toUpperCase()}]`);
@@ -131,13 +138,16 @@ export class OnDeviceVisionEngine {
   }
 
   // Scan all canvas elements for faces, text regions, and signatures
-  public async scanCanvases(canvases: NodeListOf<HTMLCanvasElement>): Promise<VisualBBox[]> {
+  public async scanCanvases(canvases: NodeListOf<HTMLCanvasElement> | HTMLCanvasElement[]): Promise<VisualBBox[]> {
     await this.loadModels();
 
     const detectedRegions: VisualBBox[] = [];
 
     for (let index = 0; index < canvases.length; index++) {
       const canvas = canvases[index];
+      // Skip if this canvas is already redacted to prevent re-burning and visual clutter
+      if (canvas.getAttribute('data-sentry-redacted') === 'true') continue;
+
       const width = canvas.width;
       const height = canvas.height;
       if (width < 16 || height < 16) continue;
@@ -162,48 +172,53 @@ export class OnDeviceVisionEngine {
         continue;
       }
 
-      // Track if anything was redacted on this canvas
-      let canvasRedacted = false;
+      const canvasId = (canvas.id || '').toLowerCase();
+      const isAvatarCanvas = canvasId.includes('avatar') || canvasId.includes('face') || canvasId.includes('director');
+      const isSignatureCanvas = canvasId.includes('sig') || canvas.closest('.dsc-box') !== null;
 
-      // 1. Neural BlazeFace Facial Biometric Pass
-      if (this.faceSession) {
-        try {
-          const faces = await this.inferBlazeFace(imgData, width, height, index);
-          if (faces.length > 0) {
-            canvasRedacted = true;
-            for (const face of faces) {
-              detectedRegions.push(face);
-              this.burnPixelRedaction(ctx, face.x, face.y, face.width, face.height, 'BIOMETRIC FACE REDACTED');
+      let canvasFaceRedacted = false;
+
+      // 1. Neural BlazeFace Facial Biometric Pass (Only on avatar/face canvases or skin-tone clusters)
+      if (isAvatarCanvas || this.hasFaceCharacteristics(imgData)) {
+        if (this.faceSession) {
+          try {
+            const faces = await this.inferBlazeFace(imgData, width, height, index);
+            if (faces.length > 0) {
+              canvasFaceRedacted = true;
+              for (const face of faces) {
+                detectedRegions.push(face);
+                this.burnPixelRedaction(ctx, face.x, face.y, face.width, face.height, 'BIOMETRIC FACE REDACTED');
+              }
             }
+          } catch (infErr) {
+            console.error('[VisionEngine] BlazeFace inference error:', infErr);
           }
-        } catch (infErr) {
-          console.error('[VisionEngine] BlazeFace inference error:', infErr);
+        }
+
+        // Biometric heuristic fallback if ONNX is offline or missed
+        if (!canvasFaceRedacted) {
+          const faceBox = this.localizeFaceRegion(imgData);
+          canvasFaceRedacted = true;
+          detectedRegions.push({
+            id: `face_heuristic_${index}`,
+            type: 'FACE',
+            x: faceBox.x,
+            y: faceBox.y,
+            width: faceBox.w,
+            height: faceBox.h,
+            confidence: 0.88,
+            token: `<REDACTED_AVATAR_${index + 1}>`
+          });
+          this.burnPixelRedaction(ctx, faceBox.x, faceBox.y, faceBox.w, faceBox.h, 'BIOMETRIC FACE MASKED');
         }
       }
 
-      // Biometric heuristic fallback if ONNX is offline or missed
-      if (!canvasRedacted && this.hasFaceCharacteristics(imgData)) {
-        const faceBox = this.localizeFaceRegion(imgData);
-        canvasRedacted = true;
-        detectedRegions.push({
-          id: `face_heuristic_${index}`,
-          type: 'FACE',
-          x: faceBox.x,
-          y: faceBox.y,
-          width: faceBox.w,
-          height: faceBox.h,
-          confidence: 0.88,
-          token: `<REDACTED_AVATAR_${index + 1}>`
-        });
-        this.burnPixelRedaction(ctx, faceBox.x, faceBox.y, faceBox.w, faceBox.h, 'BIOMETRIC FACE MASKED');
-      }
-
       // 2. Neural DBNet Text Region Detection Pass (ocr-det.onnx)
-      if (this.ocrDetSession) {
+      // Run on non-avatar canvases (satellite imagery, signature certificate text, forms)
+      if (!isAvatarCanvas && this.ocrDetSession) {
         try {
           const textRegions = await this.inferDBNetText(imgData, width, height, index);
           if (textRegions.length > 0) {
-            canvasRedacted = true;
             for (const tr of textRegions) {
               detectedRegions.push(tr);
               this.burnPixelRedaction(ctx, tr.x, tr.y, tr.width, tr.height, 'CANVAS TEXT REDACTED');
@@ -215,19 +230,36 @@ export class OnDeviceVisionEngine {
       }
 
       // 3. Handwritten Signature / Digital Signature Certificate (DSC) Pass
-      if (!canvasRedacted && this.hasStrokeCharacteristics(imgData)) {
-        const sigBox = this.localizeStrokeRegion(imgData);
-        detectedRegions.push({
-          id: `sig_${index}`,
-          type: 'SIGNATURE',
-          x: sigBox.x,
-          y: sigBox.y,
-          width: sigBox.w,
-          height: sigBox.h,
-          confidence: 0.96,
-          token: `<REDACTED_SIGNATURE_${index + 1}>`
-        });
-        this.burnPixelRedaction(ctx, sigBox.x, sigBox.y, sigBox.w, sigBox.h, 'DIGITAL SIGNATURE REDACTED');
+      // Target signature pads and DSC certificate areas
+      if (isSignatureCanvas) {
+        const strokeBox = this.detectStrokeBoundingBox(imgData);
+        if (strokeBox) {
+          detectedRegions.push({
+            id: `sig_${index}`,
+            type: 'SIGNATURE',
+            x: strokeBox.x,
+            y: strokeBox.y,
+            width: strokeBox.w,
+            height: strokeBox.h,
+            confidence: 0.96,
+            token: `<REDACTED_SIGNATURE_${index + 1}>`
+          });
+          this.burnPixelRedaction(ctx, strokeBox.x, strokeBox.y, strokeBox.w, strokeBox.h, 'DIGITAL SIGNATURE REDACTED');
+        } else {
+          // Dedicated signature canvas fallback: guarantee that drawn signature area is 100% hidden
+          const sigFallback = { x: 10, y: 15, w: width - 20, h: Math.round(height * 0.70) };
+          detectedRegions.push({
+            id: `sig_fallback_${index}`,
+            type: 'SIGNATURE',
+            x: sigFallback.x,
+            y: sigFallback.y,
+            width: sigFallback.w,
+            height: sigFallback.h,
+            confidence: 0.95,
+            token: `<REDACTED_SIGNATURE_${index + 1}>`
+          });
+          this.burnPixelRedaction(ctx, sigFallback.x, sigFallback.y, sigFallback.w, sigFallback.h, 'DIGITAL SIGNATURE REDACTED');
+        }
       }
     }
 
@@ -557,23 +589,53 @@ export class OnDeviceVisionEngine {
 
   // Dark pen stroke trajectory heuristic (signatures)
   private hasStrokeCharacteristics(data: ImageData): boolean {
-    const pixels = data.data;
-    let darkStrokePixels = 0;
-    const total = data.width * data.height;
+    return this.detectStrokeBoundingBox(data) !== null;
+  }
 
-    for (let i = 0; i < pixels.length; i += 16) {
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-      const brightness = (r + g + b) / 3;
-      if (brightness < 100) {
-        darkStrokePixels++;
+  public detectStrokeBoundingBox(data: ImageData): { x: number; y: number; w: number; h: number } | null {
+    const pixels = data.data;
+    const w = data.width;
+    const h = data.height;
+    let minX = w, maxX = 0, minY = h, maxY = 0;
+    let strokeCount = 0;
+
+    for (let y = 0; y < h; y += 2) {
+      for (let x = 0; x < w; x += 2) {
+        const idx = (y * w + x) * 4;
+        const r = pixels[idx];
+        const g = pixels[idx + 1];
+        const b = pixels[idx + 2];
+        const a = pixels[idx + 3];
+
+        // Pen ink: dark color (brightness < 120) with non-transparent alpha (> 50)
+        // Avoid counting dark background of deep space maps (#040d1a: r < 15, g < 20, b < 35, w > 300)
+        const brightness = (r + g + b) / 3;
+        if (a > 50 && brightness < 120 && !(r < 15 && g < 20 && b < 35 && w > 300)) {
+          strokeCount++;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
       }
     }
-    return (darkStrokePixels / (total / 4)) > 0.02;
+
+    // Minimum 15 stroke samples to count as genuine pen strokes
+    if (strokeCount >= 15 && maxX > minX && maxY > minY) {
+      const pad = 10;
+      const bx = Math.max(0, minX - pad);
+      const by = Math.max(0, minY - pad);
+      const bw = Math.min(w - bx, (maxX - minX) + pad * 2);
+      const bh = Math.min(h - by, (maxY - minY) + pad * 2);
+      return { x: bx, y: by, w: bw, h: bh };
+    }
+
+    return null;
   }
 
   private localizeStrokeRegion(data: ImageData): { x: number; y: number; w: number; h: number } {
+    const detected = this.detectStrokeBoundingBox(data);
+    if (detected) return detected;
     return {
       x: 4,
       y: 4,

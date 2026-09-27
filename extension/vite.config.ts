@@ -25,6 +25,18 @@ export default defineConfig({
   },
   plugins: [
     {
+      name: 'remove-import-meta-for-content-script',
+      renderChunk(code, chunk) {
+        if (chunk.fileName === 'content.js') {
+          return code.replaceAll(
+            'import.meta.url',
+            '(typeof chrome !== "undefined" && chrome.runtime?.getURL ? chrome.runtime.getURL("") : window.location.href)'
+          );
+        }
+        return null;
+      }
+    },
+    {
       name: 'copy-manifest-icons-and-wasm',
       closeBundle() {
         if (!existsSync('dist')) mkdirSync('dist');
@@ -50,11 +62,11 @@ export default defineConfig({
           }
         }
 
-        // Copy ORT wasm files to dist
+        // Copy ORT wasm and helper scripts to dist
         const ortDist = resolve(__dirname, 'node_modules/onnxruntime-web/dist');
         if (existsSync(ortDist)) {
           for (const f of readdirSync(ortDist)) {
-            if (f.endsWith('.wasm')) {
+            if (f.endsWith('.wasm') || f.endsWith('.mjs')) {
               copyFileSync(resolve(ortDist, f), resolve('dist', f));
             }
           }
