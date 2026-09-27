@@ -3,101 +3,111 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SentryAgent Console</title>
+  <title>SentryAgent Co-Pilot</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="popup-container">
-    <!-- Header -->
+    <!-- Compact Header -->
     <header class="popup-header">
       <div class="header-brand">
         <div class="shield-icon">🛡️</div>
         <div>
           <div class="app-name">SentryAgent</div>
-          <div class="app-sub">Dual-Track Vision & Risk Gate</div>
+          <div class="app-sub" id="header-status-sub">Zero-Egress On-Device Co-Pilot</div>
         </div>
       </div>
-      <div style="display: flex; align-items: center; gap: 6px;">
-        <button id="btn-open-spotlight" title="Toggle Floating Spotlight (Ctrl+Shift+K)" style="background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 6px; padding: 4px 7px; font-size: 11px; cursor: pointer; font-weight: 600;">⚡ HUD</button>
-        <button id="btn-dock-sidepanel" title="Dock to Persistent Chrome Side Panel" style="background: rgba(148, 163, 184, 0.15); border: 1px solid rgba(148, 163, 184, 0.3); color: #cbd5e1; border-radius: 6px; padding: 4px 7px; font-size: 11px; cursor: pointer; font-weight: 600;">◫ Dock</button>
-        <div class="egress-pill" id="egress-indicator">
+      <div class="header-controls">
+        <button id="btn-open-spotlight" title="Toggle In-Page Spotlight (Ctrl+Shift+K)" class="hdr-btn">⚡ HUD</button>
+        <button id="btn-dock-sidepanel" title="Dock to Chrome Side Panel" class="hdr-btn">◫ Dock</button>
+        <div class="egress-pill" id="egress-indicator" title="All operations strictly local on-device">
           <span class="dot"></span> ZERO EGRESS
         </div>
       </div>
     </header>
 
-    <!-- Status Overview -->
-    <div class="status-card">
-      <div class="status-row">
-        <span class="status-label">Perimeter Status:</span>
-        <span class="status-val active" id="perimeter-status">Standby</span>
-      </div>
-      <div class="status-row" style="margin-bottom: 6px;">
-        <span class="status-label">Vision Engine:</span>
-        <span class="status-val" id="vision-status" style="color: #38bdf8; font-size: 10px;">WebGPU Accelerated</span>
-      </div>
-      <div class="metrics-grid">
-        <div class="metric-item">
-          <div class="metric-val" id="metric-redacted">0</div>
-          <div class="metric-label">Redacted Fields</div>
-        </div>
-        <div class="metric-item">
-          <div class="metric-val" id="metric-vault">0</div>
-          <div class="metric-label">Vault Tokens</div>
-        </div>
-        <div class="metric-item">
-          <div class="metric-val text-success">SHA-256</div>
-          <div class="metric-label">Wire Sealed</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Zero-AI Deterministic Command Console -->
-    <div class="zero-ai-section" style="margin-bottom: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-        <span style="font-size: 11px; font-weight: 600; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Zero-AI Navigator</span>
-        <span style="font-size: 9px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-weight: bold;">0 LLM CALLS</span>
-      </div>
-      <div style="display: flex; gap: 6px;">
-        <input type="text" id="zero-ai-input" placeholder="e.g. search cryogenic pump, click register..." style="flex: 1; background: #1e293b; border: 1px solid #475569; border-radius: 6px; padding: 6px 10px; color: #f8fafc; font-size: 11px; outline: none;">
-        <button id="btn-zero-ai-run" style="background: #0284c7; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 600; cursor: pointer;">Go</button>
-      </div>
-      <div id="zero-ai-status" style="font-size: 10px; color: #94a3b8; margin-top: 6px; min-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
-    </div>
-
-    <!-- Primary Control Buttons -->
-    <div class="actions-section">
-      <button class="btn btn-autonomous" id="btn-autonomous">
-        <span class="btn-icon">🤖</span> Run End-to-End Agent Loop
+    <!-- Top Segment Switcher (Chat vs Telemetry vs Vault) -->
+    <nav class="tab-switch-bar">
+      <button class="tab-btn active" id="tab-btn-chat" data-tab="chat">
+        <span>💬 Co-Pilot</span>
       </button>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-        <button class="btn btn-primary" id="btn-scan">
-          <span class="btn-icon">⚡</span> Scan & Sanitize
-        </button>
-        <button class="btn btn-secondary" id="btn-restore" disabled>
-          <span class="btn-icon">↺</span> Restore
-        </button>
+      <button class="tab-btn" id="tab-btn-logs" data-tab="logs">
+        <span>📜 Telemetry</span>
+      </button>
+      <button class="tab-btn" id="tab-btn-vault" data-tab="vault">
+        <span>🔐 Vault <span id="vault-tab-badge" class="mini-badge">0</span></span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: Conversational Co-Pilot Chat View (Primary Unclustered Screen) -->
+    <section class="tab-pane active" id="pane-chat">
+      <!-- Quick Status Strip -->
+      <div class="quick-status-strip">
+        <div class="status-chip" id="chip-perimeter">
+          <span class="status-dot green"></span> <span id="strip-perimeter-text">Perimeter Active</span>
+        </div>
+        <div class="status-chip" id="chip-redacted">
+          <span>🛡️ <strong id="strip-redacted-count">0</strong> Redacted</span>
+        </div>
+        <div class="status-chip" id="chip-speed">
+          <span>⚡ <strong id="strip-latency">0.8ms</strong> Fast-Path</span>
+        </div>
       </div>
-    </div>
 
-    <!-- Tab Switcher Bar: Observability Logs vs Vault -->
-    <div class="tab-switch-bar">
-      <button class="tab-btn active" id="tab-btn-logs">
-        <span>📜 Live Telemetry Logs</span>
-      </button>
-      <button class="tab-btn" id="tab-btn-vault">
-        <span>🔐 Inversion Vault</span>
-      </button>
-    </div>
+      <!-- Chat Stream Messages Container -->
+      <div class="chat-stream" id="chat-stream">
+        <!-- Welcome Card -->
+        <div class="chat-msg msg-agent">
+          <div class="msg-avatar">🛡️</div>
+          <div class="msg-body">
+            <div class="msg-author">Sentry Co-Pilot</div>
+            <div class="msg-text">
+              I am your on-device browser co-pilot. You don't need to manually click buttons or redact fields—just tell me what to do on this page:
+            </div>
+            <div class="welcome-suggestions">
+              <button class="prompt-chip" data-prompt="protect page">🛡️ Protect Page (Redact PII)</button>
+              <button class="prompt-chip" data-prompt="submit the procurement bid">🤖 Auto-Execute Procurement Task</button>
+              <button class="prompt-chip" data-prompt="search cryogenic engine">🔍 Search Active Website</button>
+              <button class="prompt-chip" data-prompt="restore DOM">🔄 Restore Original Page</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-    <!-- Panel 1: Observability Log Console -->
-    <div class="vault-section" id="panel-logs">
+      <!-- Chat Bottom Input Dock -->
+      <div class="chat-input-dock">
+        <div class="quick-pill-row">
+          <button class="quick-pill" data-prompt="protect this page">🛡️ Protect</button>
+          <button class="quick-pill" data-prompt="automate this form">🤖 Auto-Run</button>
+          <button class="quick-pill" data-prompt="click submit">⚡ Click Submit</button>
+          <button class="quick-pill" data-prompt="restore">↺ Restore</button>
+        </div>
+        <div class="input-bar">
+          <input 
+            type="text" 
+            id="chat-input" 
+            placeholder="Type any task: 'search ...', 'click ...', 'protect', 'fill pan'..." 
+            autocomplete="off" 
+            spellcheck="false"
+          />
+          <button id="btn-chat-send" title="Send (Enter)">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Observability Telemetry Logs -->
+    <section class="tab-pane" id="pane-logs" style="display: none;">
       <div class="log-filter-bar">
         <div class="filter-chips">
           <button class="filter-chip active" data-filter="ALL">All</button>
           <button class="filter-chip" data-filter="SECURITY">Security</button>
           <button class="filter-chip" data-filter="DECISION">Decision</button>
           <button class="filter-chip" data-filter="PERCEPTION">Vision</button>
+          <button class="filter-chip" data-filter="NAVIGATOR">Nav</button>
           <button class="filter-chip" data-filter="EXECUTION">Exec</button>
         </div>
         <div class="log-actions-bar">
@@ -108,23 +118,23 @@
       <div class="log-list" id="log-list">
         <div class="log-empty">Telemetry stream ready. Actions will log here in real time.</div>
       </div>
-    </div>
+    </section>
 
-    <!-- Panel 2: Local Inversion Vault Inspector -->
-    <div class="vault-section" id="panel-vault" style="display: none;">
+    <!-- TAB 3: Local Inversion Vault Inspector -->
+    <section class="tab-pane" id="pane-vault" style="display: none;">
       <div class="vault-header">
         <span class="section-title">Local Inversion Vault</span>
         <span class="badge" id="vault-count-badge">0 Active</span>
       </div>
       <div class="vault-list" id="vault-list">
-        <div class="vault-empty">Click "Run End-to-End Agent Loop" to sanitize, seal wire payload, and execute via Local Risk Gate.</div>
+        <div class="vault-empty">No sensitive values currently vaulted. Tell the Co-Pilot to "protect page" or fill a form to encrypt fields locally.</div>
       </div>
-    </div>
+    </section>
 
-    <!-- Footer -->
+    <!-- Compact Footer -->
     <footer class="popup-footer">
-      <span>Verhoeff • Luhn • Risk Gate</span>
-      <span class="version-tag">v2.0 (Full System)</span>
+      <span>Verhoeff • Luhn • System-1 Engine</span>
+      <span class="version-tag">v2.5 (Zero-Server Ready)</span>
     </footer>
   </div>
 
