@@ -98,6 +98,14 @@ export class LocalInversionVault {
     return list;
   }
 
+  // Find first token registered for a specific PIIType
+  public lookupByType(type: PIIType): string | undefined {
+    for (const entry of this.vault.values()) {
+      if (entry.type === type) return entry.token;
+    }
+    return undefined;
+  }
+
   // Get aggregated counts of protected entities grouped by type
   public getCountsByType(): Record<string, number> {
     const counts: Record<string, number> = {};

@@ -21,6 +21,7 @@ export interface SanitizedWirePayload {
   nodes: OpaqueSceneNode[];
   visualRegionsCount: number;
   canarySignature: string;
+  userGoal?: string;
 }
 
 export class FailClosedEgressVerifier {
