@@ -41,27 +41,62 @@ SIH/
 
 ---
 
-## ⚡ Quick Start: Running the System Live
+## ⚡ Quick Start: 1-Click Execution & Testing
 
-### 1. Start the Reasoning Server
-From the project root:
+### Option A: 1-Click Windows Demo (Recommended)
+Simply double-click:
+```cmd
+run_demo.bat
+```
+This automatically:
+1. Builds the Chrome MV3 Extension (`extension/dist/`) via TypeScript & Vite.
+2. Runs all 18 automated security and pipeline verification tests.
+3. Spawns the Local Synthetic ISRO Proving Ground on `http://localhost:3000`.
+4. Spawns the Sentry Central Reasoning Server on `http://localhost:8000` with Convai Laya System 1 routing enabled.
+5. Launches your browser directly to the testbed environment.
+
+---
+
+### Option B: Manual Step-by-Step Execution
+
+#### 1. Build Extension & Run Automated Tests
+```bash
+cd extension
+npm install
+npm run build      # Compiles TypeScript & Vite bundle into extension/dist/ in ~1.1s
+npm run test:all   # Runs all 18 Unit, Pipeline, Privacy, and Live Wire Contract tests
+```
+
+#### 2. Start the Synthetic ISRO Testbed Proving Ground
+```bash
+python -m http.server 3000 --directory testbed
+```
+*Access in browser at `http://localhost:3000` (features e-Procurement, HR, and ISTRAC portals).*
+
+#### 3. Start Central Reasoning Engine & Laya System 1 (Optional)
 ```bash
 python server/app.py
 ```
-*Listens on `http://localhost:8000` (provides `/health` and `POST /api/v1/plan`).*
+*Listens on `http://localhost:8000`. Enables Convai Laya (~25ms) and LLM fallback.*
 
-### 2. Run Automated Test Suites
-```bash
-cd extension
-npm test        # Runs 9 unit tests (Verhoeff, Luhn, PAN, GSTIN, Vault, CCL, NMS)
-npm run test:e2e # Tests live cryptographic SHA-256 wire contract against Python server
-```
-
-### 3. Load the Extension into Google Chrome
+#### 4. Load Extension into Chrome
 1. Open Google Chrome and navigate to `chrome://extensions/`.
 2. Toggle on **Developer mode** in the top-right corner.
 3. Click **Load unpacked** and select:  
-   `c:\Users\iqand\Downloads\SIH\extension\dist`
+   `<repo_root>/extension/dist`
+4. Navigate to `http://localhost:3000`.
 
-### 4. Open the Simulation Proving Ground
-Open `testbed/index.html` directly in your browser. Click the **SentryAgent** extension icon to launch the cyber-defense console and trigger autonomous task execution.
+---
+
+## 🎮 Interactive Controls & Capabilities
+
+1. **In-Page Floating Spotlight HUD (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>K</kbd> or <kbd>Alt</kbd> + <kbd>S</kbd>)**:
+   - Type `search propellant`, `click submit`, `sanitize`, `seal`, or `restore`.
+   - Executes deterministically in **< 1ms** with **0 LLM calls** directly inside the active tab.
+2. **Persistent Chrome Side Panel (<kbd>◫ Dock</kbd>)**:
+   - Click the **◫ Dock** button in the popup header to dock SentryAgent into Chrome's native right-side dock.
+   - Remains permanently visible across multi-page workflows without closing on clicks.
+3. **Local System-1 Non-Autoregressive Decision Engine**:
+   - Executes routine actions on-device in **< 2ms** with **zero server dependencies**.
+4. **Model Context Protocol (MCP) Server**:
+   - Connect any external AI (Claude Desktop, Cursor) securely via `python server/mcp_server.py`.
