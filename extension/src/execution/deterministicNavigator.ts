@@ -107,21 +107,30 @@ export class DeterministicNavigator {
     }
   }
 
-  // A. Deterministic Site Search
+  // A. Deterministic Site Search & Global Web Search
   private async executeSiteSearch(query: string, tabId: number, startTime: number): Promise<NavigationResult> {
-    // 1. Locate primary search input using structural heuristic ranking
+    // 1. Locate primary search input using structural heuristic ranking on active page
     const searchInput = this.locateSearchInput();
+
+    // 2. If no on-page search input exists, seamlessly dispatch real Global Web Search!
     if (!searchInput) {
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+      console.log(`[DeterministicNavigator] No search box on active page. Executing global web search: ${searchUrl}`);
+      
+      if (typeof window !== 'undefined') {
+        window.location.href = searchUrl;
+      }
+
       return {
-        success: false,
+        success: true,
         executedVerb: 'SEARCH',
-        targetLabel: '',
-        message: 'No search input element found on the active page.',
+        targetLabel: 'Google Web Search',
+        message: `Dispatched global web search for "${query}" via Google`,
         latencyMs: Math.round(performance.now() - startTime)
       };
     }
 
-    // 2. Animate HUD reticle to search box
+    // 3. Animate HUD reticle to search box on active page
     const rect = searchInput.getBoundingClientRect();
     const centerX = Math.round(rect.left + rect.width / 2);
     const centerY = Math.round(rect.top + rect.height / 2);

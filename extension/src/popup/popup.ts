@@ -349,9 +349,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     // 2. In-Page Command Execution (Search, Click, Fill on current page)
     const check = await ensureContentScriptLoaded(tab.id, tab.url);
     if (!check.ok) {
+      // If user is on an internal chrome:// page, gracefully fall back to web search!
+      const searchMatch = cmd.match(/^(?:search\s+(?:web\s+for|web|for)?|find)\s+(.+)$/i);
+      const query = (searchMatch ? searchMatch[1] : cmd).trim();
+      const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+
+      await observabilityLogger.log('NAVIGATOR', 'SUCCESS', `Dispatched web search for "${query}"`, `Target: ${searchUrl}`, 0);
+      zeroAiStatus.textContent = `✔ Searching web for "${query}"...`;
+      await chrome.tabs.update(tab.id, { url: searchUrl });
       btnZeroAiRun.disabled = false;
-      zeroAiStatus.textContent = check.reason || 'Could not connect to active page.';
-      await observabilityLogger.log('NAVIGATOR', 'WARN', `Command skipped: page is internal`, check.reason);
       renderLogs();
       return;
     }
