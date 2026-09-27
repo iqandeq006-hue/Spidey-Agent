@@ -10,6 +10,7 @@ import { staticContentGeneralizerInstance } from '../privacy/staticContentGenera
 import { selfHealingAuditorInstance } from '../network/selfHealingAuditor';
 import { uiElementLocatorInstance } from '../vision/uiElementLocator';
 import { sentryPipelineInstance } from '../vision/sentryPipeline';
+import { deterministicNavigatorInstance } from '../execution/deterministicNavigator';
 
 interface TrackedElement {
   element: HTMLInputElement | HTMLTextAreaElement | HTMLElement;
@@ -534,6 +535,18 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })();
     return true;
   }
+
+  if (message.type === 'RUN_DETERMINISTIC_COMMAND') {
+    deterministicNavigatorInstance.executeCommand(message.command)
+      .then((res) => {
+        sendResponse(res);
+      })
+      .catch((err) => {
+        console.error('[SentryAgent] RUN_DETERMINISTIC_COMMAND error:', err);
+        sendResponse({ success: false, message: err?.message || String(err), latencyMs: 0 });
+      });
+    return true;
+  }
 });
 
-console.log('[SentryAgent] Content Script v2 (Dual-Track + Risk Gate) loaded on', window.location.href);
+console.log('[SentryAgent] Content Script v2 (Dual-Track + Risk Gate + Zero-AI Navigator) loaded on', window.location.href);

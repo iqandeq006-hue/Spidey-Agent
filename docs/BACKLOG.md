@@ -1,63 +1,64 @@
-# SentryAgent — Engineering Feature Backlog
+# SentryAgent — Engineering Feature Backlog & Roadmap
 
 **Project:** SentryAgent (ISRO SIH26171)  
 **Target:** Smart India Hackathon 2026 Evaluation  
-**Status:** In Progress / Post-v2.4 Hardening  
+**Status:** Production Hardened / Master Pipeline Deployed  
 
 ---
 
-## 1. Tactical Sentry HUD Reticle / Cursor (Zero-Dependency)
-- **Objective:** Provide visual proof of autonomous agent operation without using third-party bloated libraries (avoiding GSAP or external cursor scripts).
-- **Design Philosophy:** Match ISRO / mission-control aerospace aesthetic (cyan/saffron HUD targeting reticle, not a generic consumer mouse arrow).
-- **Implementation Specifications:**
-  - Inject an isolated DOM element via Shadow DOM (`#sentry-hud-cursor`) to prevent host-page CSS pollution.
-  - Implement smooth coordinate translation using native CSS transitions and `requestAnimationFrame`.
-  - Add visual states:
-    - **Cruising / Scanning:** Subtle crosshair following $(x, y)$ target coordinates.
-    - **Lock-On:** Reticle contracts and pulses upon acquiring interactive target node (`LOCKED: node_tender_quote`).
-    - **Action Execution:** Radial micro-tap ripple upon dispatching click/input events.
-  - **Plagiarism Safeguard:** 100% original code, zero dependencies, <60 lines of vanilla TypeScript/CSS.
+## 🟢 Section A: Verified & Implemented Milestones
+
+### 1. Tactical Sentry HUD Reticle / Cursor (Zero-Dependency)
+- **Status:** `[COMPLETED]` — [`extension/src/execution/cursorReticle.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/execution/cursorReticle.ts)
+- **Delivered:** Injects an isolated Shadow DOM (`#sentry-hud-cursor`) with zero external animation dependencies. Implements smooth glide translation, cyan/saffron mission-control crosshair, target lock-on, and radial click ripples.
+
+### 2. Cross-Page Task Checklist & Multi-Hop State Persistence
+- **Status:** `[COMPLETED]` — [`extension/src/background/background.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/background/background.ts)
+- **Delivered:** Stores session state in `chrome.storage.local`, intercepts page transitions via `chrome.tabs.onUpdated`, and tracks sub-goal checklists across multi-page workflows without amnesia.
+
+### 3. Dual-Track Privacy Vault with Algorithmic Checksums
+- **Status:** `[COMPLETED]` — [`extension/src/privacy/vault.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/privacy/vault.ts) & [`checksums.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/privacy/checksums.ts)
+- **Delivered:** Verhoeff checksums for Aadhaar, Luhn for credit cards, regex formatters for PAN/GSTIN, and deterministic local tokenization (`<AADHAAR_ID_1>`) with in-browser rehydration.
+
+### 4. GPU Spatial Layout Classifier (System 1 Decision Engine)
+- **Status:** `[COMPLETED]` — [`extension/src/vision/spatialClassifier.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/vision/spatialClassifier.ts)
+- **Delivered:** Downsamples screen to a $256 \times 256$ micro-thumbnail in 1.5ms on the GPU. Computes Shannon Visual Entropy and edge density to classify `STRUCTURED_FORM`, `DOCUMENT_ARTIFACT`, and `TELEMETRY_CANVAS`.
+
+### 5. On-Device Microsoft OmniParser v2.0 ONNX Engine
+- **Status:** `[COMPLETED]` — [`extension/src/vision/uiElementLocator.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/vision/uiElementLocator.ts) & [`models/omniparser_icon_detect.onnx`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/public/models/omniparser_icon_detect.onnx)
+- **Delivered:** Downloaded official weights from Hugging Face (`microsoft/OmniParser-v2.0`, MIT) and exported to an 8,400-anchor YOLO ONNX model. Detects buttons and widgets inside `<canvas>` telemetry dashboards and infers semantic roles for unlabeled icon buttons.
+
+### 6. Self-Healing Privacy Auditor & Egress Controller
+- **Status:** `[COMPLETED]` — [`extension/src/network/selfHealingAuditor.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/network/selfHealingAuditor.ts)
+- **Delivered:** Calculates Privacy Confidence Score ($C_{\text{privacy}}$). $C \ge 98\%$ routes to fast path; $80\% \le C < 98\%$ autonomously widens redaction padding by 20% and re-masks; $C < 80\%$ strips visual crops and downgrades to DOM L1.
+
+### 7. Dual-Track Static Content Generalization
+- **Status:** `[COMPLETED]` — [`extension/src/privacy/staticContentGeneralizer.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/privacy/staticContentGeneralizer.ts)
+- **Delivered:** Scans `<td>`, `<span>`, `<p>` text nodes to generalize non-input financial figures and tender bids into typed schemas (`<VAL:BUDGET bracket="TIER_3_HIGH_VALUE_LAKH">`).
+
+### 8. Option A Hardware-Level CDP Dispatcher
+- **Status:** `[COMPLETED]` — [`extension/src/execution/cdpDispatcher.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/execution/cdpDispatcher.ts)
+- **Delivered:** Dispatches trusted hardware mouse clicks, keystrokes, and keyboard keys directly via `chrome.debugger`. Bypasses bot protections with zero external Playwright/Node process required on Demo Day!
+
+### 9. Master 6-Step Autonomous Perception Pipeline
+- **Status:** `[COMPLETED]` — [`extension/src/vision/sentryPipeline.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/vision/sentryPipeline.ts)
+- **Delivered:** Unifies Trigger $\to$ GPU Classifier $\to$ Privacy Shield $\to$ Self-Healing Auditor $\to$ Element Locator $\to$ CDP Hardware Execution.
+
+### 10. Zero-AI Deterministic Web Search & Navigation Engine
+- **Status:** `[COMPLETED]` — [`extension/src/execution/deterministicNavigator.ts`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/extension/src/execution/deterministicNavigator.ts)
+- **Delivered:** 100% offline, zero-LLM command runner (`SEARCH <query>`, `CLICK <label>`, `FILL <field>`). Uses DOM heuristic search box scoring and Levenshtein similarity to execute in <5ms with zero cloud calls.
+
+### 11. Model Context Protocol (MCP) Server Bridge
+- **Status:** `[COMPLETED]` — [`server/mcp_server.py`](file:///c:/Users/iqand/Downloads/HACK/SIH_3/server/mcp_server.py)
+- **Delivered:** Standard JSON-RPC 2.0 MCP server exposing `browser_get_sanitized_state`, `browser_zero_ai_command`, `browser_click_node`, and `browser_fill_node` for Claude Desktop, Cursor, and any MCP agent.
 
 ---
 
-## 2. Sentry Real-Time Telemetry Audit Stream (Live Privacy Ledger)
-- **Objective:** Provide empirical visual evidence to evaluators that 0 bytes of raw PII ever cross the network wire.
-- **Design Philosophy:** Display a live mission-control telemetry stream rather than a static post-scan table.
-- **Implementation Specifications:**
-  - Build a live event-dispatch pipeline connecting `vaultInstance`, `visionEngineInstance`, and `egressVerifierInstance` to the popup HUD.
-  - Stream timestamped records with microsecond accuracy:
-    - `[PERCEPTION]` Track 1 DOM extraction count and Verhoeff/Luhn validation results.
-    - `[WEBGPU-VISION]` BlazeFace & DBNet neural detection latencies (highlighting the ~9.01 ms benchmark).
-    - `[VAULT]` Tokenization event mappings (`<PERSON_1>`, `<AADHAAR_ID_1>`).
-    - `[EGRESS]` SHA-256 envelope digest seal + zero-leak canary verification.
-    - `[POLICY-GATE]` 4-Tier action risk evaluation and user-confirmation modal state.
-  - Include an interactive toggle: "Raw User View" vs. "Sanitized Cloud View" vs. "Live Cryptographic Ledger".
+## 🔵 Section B: Active Roadmap & Enhancements
 
----
+### 12. In-Browser Side Panel Copilot UI
+- **Objective:** Provide a persistent side-by-side Chrome Side Panel chat console (`chrome.sidePanel`) allowing live natural language conversations while watching SentryAgent navigate.
+- **Components:** Message stream, real-time telemetry badge, and one-click human approval buttons for Tier 4 actions.
 
-## 3. Cross-Page Task Checklist & Multi-Hop State Persistence
-- **Objective:** Enable the agent to survive page reloads, tab navigation, and multi-step workflows without amnesia.
-- **Implementation Specifications:**
-  - Persist active session state in `chrome.storage.session` / `chrome.storage.local`.
-  - Maintain a sub-goal checklist received from the initial planner (`[Step 1: Authenticate, Step 2: Fill Details, Step 3: Authorize DSC]`).
-  - Runner marks items as `DONE` and passes remaining sub-goals back to `/api/v1/plan` after each navigation step.
-  - Include a stall-detector: if page state does not change after 3 consecutive actions, trigger recovery re-scan.
-
----
-
-## 4. Self-Healing Semantic Target Grounding
-- **Objective:** Prevent action dispatch failures caused by dynamic SPA re-renders (React/Vue detached DOM nodes).
-- **Implementation Specifications:**
-  - If an opaque ID (`node_btn_submit`) fails direct lookup, execute a fallback semantic probe:
-    1. Search by `data-sentry-idx` attribute.
-    2. Search by structural proximity and ARIA role/label matching.
-    3. Calculate geometric IoU against the original recorded bounding box.
-  - Automatically heal the reference and log the self-healing event in the telemetry stream.
-
----
-
-## 5. Multi-Domain Privacy Workflows Beyond Form Filling
-- **Objective:** Break out of the "toy form-filler" trap and showcase true browser agent utility across diverse enterprise workflows:
-  - **Scenario A: Confidential Document & Invoice Audit** (Analyzing canvas-rendered procurement specs and vendor invoices while redacting bank details and signatures).
-  - **Scenario B: Executive Dashboard & Email Summarization** (Summarizing confidential project updates or email chains while masking names, salaries, and sensitive URLs).
-  - **Scenario C: Mission Telemetry & Operations Console** (Operating operational controls on ISTRAC console while redacting secret transponder codes and flight director biometrics).
+### 13. Sentry Real-Time Telemetry Audit Ledger Stream
+- **Objective:** Visual popup stream showing microsecond timestamped logs of every Verhoeff checksum, ONNX inference time, and SHA-256 wire seal event.

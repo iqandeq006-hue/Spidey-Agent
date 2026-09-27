@@ -124,6 +124,38 @@ export class CDPDispatcher {
 
     return false;
   }
+
+  // Hardware Key Press (e.g. 'Enter', 'Escape', 'Tab')
+  public async hardwareKey(tabId: number, key: string, fallbackElement?: HTMLElement): Promise<boolean> {
+    const isAttached = await this.ensureAttached(tabId);
+
+    if (isAttached && typeof chrome !== 'undefined' && chrome.debugger) {
+      try {
+        await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchKeyEvent', {
+          type: 'keyDown',
+          key,
+          code: key
+        });
+        await chrome.debugger.sendCommand({ tabId }, 'Input.dispatchKeyEvent', {
+          type: 'keyUp',
+          key,
+          code: key
+        });
+        console.log(`[CDPDispatcher] Hardware key [${key}] dispatched via CDP.`);
+        return true;
+      } catch (err) {
+        console.warn(`[CDPDispatcher] CDP key [${key}] failed:`, err);
+      }
+    }
+
+    if (fallbackElement) {
+      fallbackElement.dispatchEvent(new KeyboardEvent('keydown', { key, code: key, bubbles: true }));
+      fallbackElement.dispatchEvent(new KeyboardEvent('keyup', { key, code: key, bubbles: true }));
+      return true;
+    }
+
+    return false;
+  }
 }
 
 export const cdpDispatcherInstance = new CDPDispatcher();

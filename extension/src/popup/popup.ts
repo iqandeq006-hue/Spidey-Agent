@@ -199,6 +199,48 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // Zero-AI Deterministic Execution
+  const zeroAiInput = document.getElementById('zero-ai-input') as HTMLInputElement;
+  const btnZeroAiRun = document.getElementById('btn-zero-ai-run') as HTMLButtonElement;
+  const zeroAiStatus = document.getElementById('zero-ai-status') as HTMLElement;
+
+  async function runZeroAiCommand() {
+    const cmd = zeroAiInput.value.trim();
+    if (!cmd) return;
+
+    const tab = await getActiveTab();
+    if (!tab || !tab.id) return;
+
+    btnZeroAiRun.disabled = true;
+    zeroAiStatus.textContent = `⚡ Executing: "${cmd}"...`;
+
+    const check = await ensureContentScriptLoaded(tab.id, tab.url);
+    if (!check.ok) {
+      btnZeroAiRun.disabled = false;
+      zeroAiStatus.textContent = check.reason || 'Could not connect to active page.';
+      return;
+    }
+
+    chrome.tabs.sendMessage(tab.id, { type: 'RUN_DETERMINISTIC_COMMAND', command: cmd }, (response) => {
+      btnZeroAiRun.disabled = false;
+      if (chrome.runtime.lastError) {
+        zeroAiStatus.textContent = `Error: ${chrome.runtime.lastError.message}`;
+        return;
+      }
+      if (response && response.success) {
+        zeroAiStatus.textContent = `✔ ${response.message}`;
+        refreshStatus();
+      } else {
+        zeroAiStatus.textContent = `❌ ${response?.message || 'Action failed.'}`;
+      }
+    });
+  }
+
+  btnZeroAiRun?.addEventListener('click', runZeroAiCommand);
+  zeroAiInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') runZeroAiCommand();
+  });
+
   function escapeHtml(str: string): string {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }

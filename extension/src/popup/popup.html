@@ -48,6 +48,19 @@
       </div>
     </div>
 
+    <!-- Zero-AI Deterministic Command Console -->
+    <div class="zero-ai-section" style="margin-bottom: 12px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <span style="font-size: 11px; font-weight: 600; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px;">⚡ Zero-AI Navigator</span>
+        <span style="font-size: 9px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-weight: bold;">0 LLM CALLS</span>
+      </div>
+      <div style="display: flex; gap: 6px;">
+        <input type="text" id="zero-ai-input" placeholder="e.g. search cryogenic pump, click register..." style="flex: 1; background: #1e293b; border: 1px solid #475569; border-radius: 6px; padding: 6px 10px; color: #f8fafc; font-size: 11px; outline: none;">
+        <button id="btn-zero-ai-run" style="background: #0284c7; color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 600; cursor: pointer;">Go</button>
+      </div>
+      <div id="zero-ai-status" style="font-size: 10px; color: #94a3b8; margin-top: 6px; min-height: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+    </div>
+
     <!-- Primary Control Buttons -->
     <div class="actions-section">
       <button class="btn btn-autonomous" id="btn-autonomous">
