@@ -19,6 +19,9 @@ interface TrackedElement {
   originalValue: string;
   token: string;
   type: PIIType;
+  originalText?: string;
+  originalChecked?: boolean;
+  overlayBadge?: HTMLElement;
 }
 
 interface TrackedCanvas {
@@ -46,6 +49,28 @@ export function determineDisclosureLevel(
   return canvasesCount > 0 ? 'L2' : 'L1';
 }
 
+// Verifies if a canvas actually contains the opaque blackout pixels (#0f172a)
+export function isCanvasActivelyRedacted(canvas: HTMLCanvasElement): boolean {
+  if (canvas.getAttribute('data-sentry-redacted') !== 'true') return false;
+  try {
+    const ctx = canvas.getContext('2d');
+    if (!ctx || canvas.width === 0 || canvas.height === 0) return false;
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = imgData.data;
+    let blackoutCount = 0;
+    // Fast step by 16 bytes (every 4th pixel)
+    for (let i = 0; i < d.length; i += 16) {
+      if (d[i+3] === 255 && d[i] >= 10 && d[i] <= 20 && d[i+1] >= 18 && d[i+1] <= 28 && d[i+2] >= 36 && d[i+2] <= 48) {
+        blackoutCount++;
+        if (blackoutCount >= 25) return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    return true; // CORS tainted fallback
+  }
+}
+
 // 1. Scan and Sanitize the Webpage (Phase 1 DOM + Phase 2 On-Device Vision)
 // Gated by Minimum-Disclosure Ladder: dynamically escalates to L2 on-device vision when canvases exist
 export async function scanAndSanitizePage(
@@ -56,15 +81,16 @@ export async function scanAndSanitizePage(
   const entitiesByType: Record<string, number> = {};
   const tokens: string[] = [];
 
+  injectSentryStyles();
   actionDispatcherInstance.clearRegistry();
 
   // 0. Macro Spatial Layout & Domain Classification (2ms)
   const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas');
   const spatialResult = await spatialClassifierInstance.classifyScreen(Array.from(canvases));
 
-  // A. Scan Form Inputs & Textareas (Track 1)
+  // A.1. Scan Form Inputs & Textareas (Track 1)
   const inputElements = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-    'input[type="text"], input[type="email"], input[type="tel"], input:not([type]), textarea'
+    'input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input:not([type]), textarea'
   );
 
   inputElements.forEach((input, idx) => {
@@ -74,7 +100,48 @@ export async function scanAndSanitizePage(
     // If this field is already tokenized, skip it
     if (vaultInstance.isToken(rawVal)) return;
 
-    const match = classifySensitiveText(rawVal);
+    let match = classifySensitiveText(rawVal);
+    
+    // Semantic Form Deduction: Detect Name, Address, DOB, Secrets from field attributes & labels
+    if (!match) {
+      const fieldId = (input.id || '').toLowerCase();
+      const fieldName = (input.name || '').toLowerCase();
+      const fieldPlaceholder = (input.placeholder || '').toLowerCase();
+      const fieldAutocomplete = (input.autocomplete || '').toLowerCase();
+      const fieldType = (input.getAttribute('type') || '').toLowerCase();
+
+      let labelText = '';
+      if (input.id) {
+        const labelEl = document.querySelector(`label[for="${input.id}"]`);
+        if (labelEl) labelText = (labelEl.textContent || '').toLowerCase();
+      }
+      if (!labelText) {
+        const parentLabel = input.closest('label');
+        if (parentLabel) labelText = (parentLabel.textContent || '').toLowerCase();
+      }
+
+      const meta = `${fieldId} ${fieldName} ${fieldPlaceholder} ${fieldAutocomplete} ${labelText}`;
+
+      if (meta.includes('name') || meta.includes('fname') || meta.includes('lname') || meta.includes('first') || meta.includes('last') || meta.includes('user') || meta.includes('student')) {
+        match = { type: 'PERSON', cleanValue: rawVal, confidence: 0.95 };
+      } else if (meta.includes('address') || meta.includes('street') || meta.includes('city') || meta.includes('location')) {
+        match = { type: 'ADDRESS', cleanValue: rawVal, confidence: 0.95 };
+      } else if (meta.includes('date') || meta.includes('birth') || meta.includes('dob') || fieldType === 'date' || /^\d{1,2}[-\/\s][A-Za-z0-9]{3,}[-\/\s]\d{2,4}$/.test(rawVal) || /^\d{4}-\d{2}-\d{2}$/.test(rawVal)) {
+        match = { type: 'DOB', cleanValue: rawVal, confidence: 0.95 };
+      } else if (fieldType === 'password' || meta.includes('pass') || meta.includes('secret') || meta.includes('pin')) {
+        match = { type: 'CONFIDENTIAL_NUM', cleanValue: rawVal, confidence: 0.95 };
+      } else if (meta.includes('phone') || meta.includes('mobile') || meta.includes('tel')) {
+        match = { type: 'PHONE', cleanValue: rawVal, confidence: 0.95 };
+      } else if (meta.includes('email') || meta.includes('mail')) {
+        match = { type: 'EMAIL', cleanValue: rawVal, confidence: 0.95 };
+      } else if (meta.includes('subject') || meta.includes('course') || meta.includes('skill')) {
+        match = { type: 'CONFIDENTIAL_TEXT', cleanValue: rawVal, confidence: 0.95 };
+      } else {
+        // Universal fallback: Any filled form input is sensitive user data
+        match = { type: 'CONFIDENTIAL_TEXT', cleanValue: rawVal, confidence: 0.90 };
+      }
+    }
+
     if (match) {
       const selector = input.id ? `#${input.id}` : `input[data-sentry-idx="${idx}"]`;
       input.setAttribute('data-sentry-idx', String(idx));
@@ -99,19 +166,229 @@ export async function scanAndSanitizePage(
     }
   });
 
+  // A.2. Scan Checkable Inputs (Radios & Checkboxes - e.g., Gender, Hobbies)
+  const checkables = document.querySelectorAll<HTMLInputElement>(
+    'input[type="radio"]:checked, input[type="checkbox"]:checked'
+  );
+  checkables.forEach((input, idx) => {
+    let labelEl: HTMLElement | null = null;
+    if (input.id) {
+      labelEl = document.querySelector<HTMLElement>(`label[for="${input.id}"]`);
+    }
+    if (!labelEl) {
+      labelEl = input.closest('label');
+    }
+    if (!labelEl && input.parentElement) {
+      labelEl = input.parentElement.querySelector('label') || input.parentElement;
+    }
+
+    const rawVal = (labelEl?.textContent || input.value || '').trim();
+    if (!rawVal || vaultInstance.isToken(rawVal)) return;
+
+    const inputName = (input.name || '').toLowerCase();
+    const isGender = inputName.includes('gender') || ['male', 'female', 'other'].includes(rawVal.toLowerCase());
+    const isPreference = inputName.includes('hobbi') || inputName.includes('interest') || inputName.includes('sport') || inputName.includes('music');
+    const piiType: PIIType = isGender ? 'GENDER' : (isPreference ? 'PREFERENCE' : 'CONFIDENTIAL_TEXT');
+
+    const selector = input.id ? `#${input.id}` : `checkable[data-sentry-idx="${idx}"]`;
+    input.setAttribute('data-sentry-idx', String(idx));
+    const token = vaultInstance.tokenize(rawVal, piiType, selector);
+
+    if (labelEl) {
+      const origText = labelEl.textContent || '';
+      labelEl.textContent = token;
+      labelEl.classList.add('sentry-redacted-field');
+
+      trackedElements.set(selector, {
+        element: labelEl,
+        originalValue: rawVal,
+        originalText: origText,
+        originalChecked: input.checked,
+        token,
+        type: piiType
+      });
+    }
+
+    newRedactedCount++;
+    entitiesByType[piiType] = (entitiesByType[piiType] || 0) + 1;
+    tokens.push(token);
+  });
+
+  // A.3. Scan File Upload Inputs (e.g., Picture upload)
+  const fileInputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
+  fileInputs.forEach((fileInput, idx) => {
+    const rawVal = fileInput.files?.[0]?.name || fileInput.value.replace(/.*[\/\\]/, '');
+    if (!rawVal || rawVal.trim().length === 0 || vaultInstance.isToken(rawVal)) return;
+
+    const selector = fileInput.id ? `#${fileInput.id}` : `file-input[data-sentry-idx="${idx}"]`;
+    fileInput.setAttribute('data-sentry-idx', String(idx));
+    const token = vaultInstance.tokenize(rawVal, 'DOCUMENT', selector);
+
+    const badge = document.createElement('span');
+    badge.className = 'sentry-redacted-field sentry-redacted-file-badge';
+    badge.textContent = token;
+
+    fileInput.classList.add('sentry-file-input-redacted');
+    fileInput.after(badge);
+
+    trackedElements.set(selector, {
+      element: fileInput,
+      originalValue: rawVal,
+      token,
+      type: 'DOCUMENT',
+      overlayBadge: badge
+    });
+
+    newRedactedCount++;
+    entitiesByType['DOCUMENT'] = (entitiesByType['DOCUMENT'] || 0) + 1;
+    tokens.push(token);
+  });
+
+  // A.4. Scan Multi-Select Badges & Auto-Complete Chips (e.g., Subjects)
+  const multiValues = document.querySelectorAll<HTMLElement>(
+    'div[class*="multi-value"], div[class*="multiValue"], div[class*="MultiValue"], .badge:not(.sentry-redacted-field), [class*="chip"]:not(.sentry-redacted-field)'
+  );
+  multiValues.forEach((mv, idx) => {
+    if (mv.classList.contains('sentry-redacted-field') || mv.getAttribute('data-sentry-redacted') === 'true') return;
+    const labelChild = mv.querySelector<HTMLElement>('div[class*="label"], [class*="Label"]') || mv;
+    let rawText = (labelChild.textContent || '').trim();
+    rawText = rawText.replace(/[×x]$/, '').trim();
+    if (!rawText || vaultInstance.isToken(rawText)) return;
+
+    const selector = `multi-val-${idx}`;
+    const token = vaultInstance.tokenize(rawText, 'CONFIDENTIAL_TEXT', selector);
+    const origText = labelChild.textContent || '';
+    
+    labelChild.textContent = token;
+    mv.classList.add('sentry-redacted-field');
+    mv.setAttribute('data-sentry-redacted', 'true');
+
+    trackedElements.set(selector, {
+      element: labelChild,
+      originalValue: rawText,
+      originalText: origText,
+      token,
+      type: 'CONFIDENTIAL_TEXT'
+    });
+
+    newRedactedCount++;
+    entitiesByType['CONFIDENTIAL_TEXT'] = (entitiesByType['CONFIDENTIAL_TEXT'] || 0) + 1;
+    tokens.push(token);
+  });
+
+  // A.5. Scan Custom Single-Value Dropdowns & Selects (e.g., State, City)
+  const singleValues = document.querySelectorAll<HTMLElement>(
+    'div[class*="single-value"], div[class*="singleValue"], div[class*="SingleValue"]'
+  );
+  singleValues.forEach((sv, idx) => {
+    if (sv.classList.contains('sentry-redacted-field') || sv.getAttribute('data-sentry-redacted') === 'true') return;
+    const rawText = (sv.textContent || '').trim();
+    if (!rawText || rawText.toLowerCase().startsWith('select ') || vaultInstance.isToken(rawText)) return;
+
+    const selector = `single-val-${idx}`;
+    const token = vaultInstance.tokenize(rawText, 'LOCATION', selector);
+    const origText = sv.textContent || '';
+
+    sv.textContent = token;
+    sv.classList.add('sentry-redacted-field');
+    sv.setAttribute('data-sentry-redacted', 'true');
+
+    trackedElements.set(selector, {
+      element: sv,
+      originalValue: rawText,
+      originalText: origText,
+      token,
+      type: 'LOCATION'
+    });
+
+    newRedactedCount++;
+    entitiesByType['LOCATION'] = (entitiesByType['LOCATION'] || 0) + 1;
+    tokens.push(token);
+  });
+
+  // A.6. Scan Native Select Dropdowns
+  const nativeSelects = document.querySelectorAll<HTMLSelectElement>('select');
+  nativeSelects.forEach((sel, idx) => {
+    if (sel.selectedIndex < 0) return;
+    const opt = sel.options[sel.selectedIndex];
+    if (!opt) return;
+    const rawVal = (opt.textContent || opt.value || '').trim();
+    if (!rawVal || rawVal.toLowerCase().startsWith('select ') || vaultInstance.isToken(rawVal)) return;
+
+    const selector = sel.id ? `#${sel.id}` : `select[data-sentry-idx="${idx}"]`;
+    sel.setAttribute('data-sentry-idx', String(idx));
+    const token = vaultInstance.tokenize(rawVal, 'LOCATION', selector);
+    const origText = opt.textContent || '';
+
+    opt.textContent = token;
+    sel.classList.add('sentry-redacted-field');
+
+    trackedElements.set(selector, {
+      element: opt,
+      originalValue: rawVal,
+      originalText: origText,
+      token,
+      type: 'LOCATION'
+    });
+
+    newRedactedCount++;
+    entitiesByType['LOCATION'] = (entitiesByType['LOCATION'] || 0) + 1;
+    tokens.push(token);
+  });
+
   // A.2. Scan & Generalize Static Content & Artifacts (Track 1B: Tables, spans, and paragraphs)
   const staticResult = staticContentGeneralizerInstance.scanAndGeneralizeStaticText();
   newRedactedCount += staticResult.count;
   tokens.push(...staticResult.tokens);
+  if (staticResult.entitiesByType) {
+    for (const [t, c] of Object.entries(staticResult.entitiesByType)) {
+      entitiesByType[t] = (entitiesByType[t] || 0) + c;
+    }
+  }
+
+  // A.3. Scan Sensitive Visual Images (Generic across ANY website: avatars, profile photos, signatures)
+  const sensitiveImages = document.querySelectorAll<HTMLImageElement>(
+    'img[class*="avatar"], img[class*="profile"], img[class*="user-photo"], img[class*="user-img"], img[alt*="avatar" i], img[alt*="profile" i], img[alt*="user" i], img[id*="avatar"], img[id*="profile"], img[class*="signature"], img[alt*="signature" i]'
+  );
+  sensitiveImages.forEach((img, idx) => {
+    if (img.classList.contains('sentry-redacted-field') || img.getAttribute('data-sentry-redacted') === 'true') return;
+    if (img.closest('#sentry-agent-root') || img.closest('#sentry-risk-modal')) return;
+
+    const altOrClass = `${img.className} ${img.alt} ${img.id}`.toLowerCase();
+    const isSig = altOrClass.includes('sign');
+    const piiType: PIIType = isSig ? 'CANVAS_SIGNATURE' : 'AVATAR_FACE';
+
+    const selector = img.id ? `#${img.id}` : `img[data-sentry-img-idx="${idx}"]`;
+    img.setAttribute('data-sentry-img-idx', String(idx));
+    const token = vaultInstance.tokenize(`[IMAGE_${img.src.substring(0, 40)}]`, piiType, selector);
+
+    img.classList.add('sentry-redacted-field', 'sentry-redacted-image');
+    img.setAttribute('data-sentry-redacted', 'true');
+
+    trackedElements.set(selector, {
+      element: img,
+      originalValue: img.src,
+      token,
+      type: piiType
+    });
+
+    newRedactedCount++;
+    entitiesByType[piiType] = (entitiesByType[piiType] || 0) + 1;
+    tokens.push(token);
+  });
 
   // B. Run On-Device Vision Engine (Track 2: Gated by Minimum-Disclosure Ladder)
   let visualRegions: any[] = [];
   const activeLevel = determineDisclosureLevel(canvases.length, disclosureLevel);
 
   // Filter to unredacted canvases ONLY to prevent double-burning, nested boxes, and visual clutter
+  // If a canvas was cleared or re-drawn by the user, immediately purge stale tracking
   const unredactedCanvases: HTMLCanvasElement[] = [];
   canvases.forEach((canvas) => {
-    if (!trackedCanvases.has(canvas) && canvas.getAttribute('data-sentry-redacted') !== 'true') {
+    if (!isCanvasActivelyRedacted(canvas)) {
+      canvas.removeAttribute('data-sentry-redacted');
+      canvas.classList.remove('sentry-redacted-canvas');
+      trackedCanvases.delete(canvas);
       unredactedCanvases.push(canvas);
     }
   });
@@ -353,14 +630,30 @@ export async function runAutonomousStep(): Promise<{ success: boolean; message: 
 }
 
 // 4. Restore original DOM values & Canvas Pixels (Rollback)
-export function restoreOriginalDOM(): void {
-  // A. Rollback DOM Form Input Elements
+export function restoreOriginalDOM(clearVault: boolean = true): void {
+  // A. Rollback DOM Form Input Elements & Selections
   for (const [, item] of trackedElements.entries()) {
     if ('value' in item.element) {
       (item.element as HTMLInputElement).value = item.originalValue;
     }
-    item.element.classList.remove('sentry-redacted-field');
+    if (item.originalChecked !== undefined && 'checked' in item.element) {
+      (item.element as HTMLInputElement).checked = item.originalChecked;
+    }
+    if (item.originalText !== undefined) {
+      item.element.textContent = item.originalText;
+    }
+    if (item.overlayBadge && item.overlayBadge.parentNode) {
+      item.overlayBadge.remove();
+    }
+    item.element.classList.remove('sentry-redacted-field', 'sentry-redacted-image', 'sentry-file-input-redacted', 'sentry-static-redacted');
     item.element.removeAttribute('data-sentry-idx');
+    item.element.removeAttribute('data-sentry-img-idx');
+    item.element.removeAttribute('data-sentry-redacted');
+
+    if (item.element.parentElement) {
+      item.element.parentElement.classList.remove('sentry-redacted-field', 'sentry-redacted-image', 'sentry-static-redacted');
+      item.element.parentElement.removeAttribute('data-sentry-redacted');
+    }
   }
 
   // B. Rollback Canvas Pixel Redactions to pristine unredacted state
@@ -376,6 +669,8 @@ export function restoreOriginalDOM(): void {
     canvas.removeAttribute('data-sentry-redacted');
     canvas.classList.remove('sentry-redacted-canvas');
   }
+  trackedCanvases.clear();
+  trackedElements.clear();
 
   // B.2. Rollback Static Content Generalizations
   staticContentGeneralizerInstance.reset();
@@ -406,10 +701,12 @@ export function restoreOriginalDOM(): void {
   }
 
   isCurrentlySanitized = false;
-  vaultInstance.reset();
+  if (clearVault) {
+    vaultInstance.reset();
+  }
   trackedElements.clear();
   trackedCanvases.clear();
-  console.log('[SentryAgent] Rolled back DOM and Canvases to pristine unredacted state.');
+  console.log(`[SentryAgent] Rolled back DOM and Canvases to pristine state (clearVault=${clearVault}).`);
 }
 
 // 5. Intercept form submissions to ensure safe local re-hydration
@@ -432,20 +729,49 @@ function injectSentryStyles() {
   const style = document.createElement('style');
   style.id = 'sentry-agent-styles';
   style.textContent = `
-    .sentry-redacted-field {
-      background-color: #ecfdf5 !important;
-      color: #065f46 !important;
-      border: 1.5px solid #10b981 !important;
-      font-family: 'JetBrains Mono', monospace !important;
-      font-weight: 600 !important;
-      letter-spacing: -0.2px !important;
-      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15) !important;
+    .sentry-redacted-field, .sentry-static-redacted {
+      background-color: #070b14 !important;
+      color: #38bdf8 !important;
+      border: 1.5px solid #0284c7 !important;
+      font-family: 'JetBrains Mono', 'Segoe UI Mono', monospace !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.3px !important;
+      box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.25) !important;
+      border-radius: 4px !important;
+    }
+    .sentry-table-cell-redacted {
+      display: inline-block !important;
+      padding: 4px 10px !important;
+      font-size: 11.5px !important;
+      min-width: 90px !important;
+      text-align: center !important;
+      box-sizing: border-box !important;
+      line-height: 1.4 !important;
+      vertical-align: middle !important;
+      margin: 2px 0 !important;
+    }
+    img.sentry-redacted-image {
+      filter: blur(18px) brightness(0.15) !important;
+      outline: 2px solid #0284c7 !important;
+      outline-offset: -2px !important;
+      box-shadow: 0 0 15px rgba(2, 132, 199, 0.4) !important;
+      transition: filter 0.2s ease !important;
+    }
+    .sentry-file-input-redacted {
+      color: transparent !important;
+    }
+    .sentry-redacted-file-badge {
+      display: inline-block !important;
+      padding: 3px 8px !important;
+      font-size: 11px !important;
+      vertical-align: middle !important;
+      margin-left: 8px !important;
     }
     .sentry-redacted-canvas {
-      outline: 2.5px solid #10b981 !important;
+      outline: 2.5px solid #ef4444 !important;
       outline-offset: 3px !important;
       border-radius: 4px !important;
-      box-shadow: 0 0 15px rgba(16, 185, 129, 0.35) !important;
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.35) !important;
       transition: all 0.3s ease !important;
     }
   `;
@@ -468,7 +794,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message.type === 'RESTORE_ORIGINAL_DOM') {
-    restoreOriginalDOM();
+    const clearVault = message.clearVault !== false;
+    restoreOriginalDOM(clearVault);
     sendResponse({ success: true, isSanitized: false });
     return true;
   }

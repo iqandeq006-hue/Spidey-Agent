@@ -145,8 +145,11 @@ export class OnDeviceVisionEngine {
 
     for (let index = 0; index < canvases.length; index++) {
       const canvas = canvases[index];
-      // Skip if this canvas is already redacted to prevent re-burning and visual clutter
-      if (canvas.getAttribute('data-sentry-redacted') === 'true') continue;
+      // Skip if this canvas is actively redacted to prevent re-burning
+      if (canvas.getAttribute('data-sentry-redacted') === 'true' && this.isCanvasActivelyRedacted(canvas)) {
+        continue;
+      }
+      canvas.removeAttribute('data-sentry-redacted');
 
       const width = canvas.width;
       const height = canvas.height;
@@ -173,13 +176,20 @@ export class OnDeviceVisionEngine {
       }
 
       const canvasId = (canvas.id || '').toLowerCase();
-      const isAvatarCanvas = canvasId.includes('avatar') || canvasId.includes('face') || canvasId.includes('director');
-      const isSignatureCanvas = canvasId.includes('sig') || canvas.closest('.dsc-box') !== null;
+      const canvasClass = (canvas.className || '').toLowerCase();
+      const isAvatarCanvas = canvasId.includes('avatar') || canvasId.includes('face') || canvasId.includes('director') || canvasClass.includes('avatar');
+      
+      const isSignatureContext = 
+        canvasId.includes('sig') || canvasId.includes('pad') || canvasId.includes('draw') ||
+        canvasClass.includes('sig') || canvasClass.includes('pad') ||
+        canvas.closest('.dsc-box, .signature-pad, [class*="signature"], [class*="sign"], [id*="signature"], [id*="sign"]') !== null ||
+        (typeof document !== 'undefined' && (document.title.toLowerCase().includes('signature') || window.location.href.toLowerCase().includes('signature')));
 
       let canvasFaceRedacted = false;
+      const strokeBox = this.detectStrokeBoundingBox(imgData);
 
       // 1. Neural BlazeFace Facial Biometric Pass (Only on avatar/face canvases or skin-tone clusters)
-      if (isAvatarCanvas || this.hasFaceCharacteristics(imgData)) {
+      if (isAvatarCanvas || (!isSignatureContext && this.hasFaceCharacteristics(imgData))) {
         if (this.faceSession) {
           try {
             const faces = await this.inferBlazeFace(imgData, width, height, index);
@@ -196,7 +206,7 @@ export class OnDeviceVisionEngine {
         }
 
         // Biometric heuristic fallback if ONNX is offline or missed
-        if (!canvasFaceRedacted) {
+        if (!canvasFaceRedacted && isAvatarCanvas) {
           const faceBox = this.localizeFaceRegion(imgData);
           canvasFaceRedacted = true;
           detectedRegions.push({
@@ -213,52 +223,53 @@ export class OnDeviceVisionEngine {
         }
       }
 
-      // 2. Neural DBNet Text Region Detection Pass (ocr-det.onnx)
-      // Run on non-avatar canvases (satellite imagery, signature certificate text, forms)
+      // 2. Signature / Drawing Canvas Pass: Redact the COMPLETE canvas area allocated by the website
+      if (!isAvatarCanvas && (strokeBox || isSignatureContext)) {
+        const fullSigBox = {
+          x: 0,
+          y: 0,
+          w: width,
+          h: height
+        };
+        detectedRegions.push({
+          id: `sig_${index}`,
+          type: 'SIGNATURE',
+          x: fullSigBox.x,
+          y: fullSigBox.y,
+          width: fullSigBox.w,
+          height: fullSigBox.h,
+          confidence: 0.99,
+          token: `<REDACTED_SIGNATURE_${index + 1}>`
+        });
+        this.burnPixelRedaction(ctx, fullSigBox.x, fullSigBox.y, fullSigBox.w, fullSigBox.h, 'DIGITAL SIGNATURE REDACTED');
+        continue; // Fully redacted edge-to-edge; proceed to next canvas
+      }
+
+      // 3. Neural DBNet Text Region Detection Pass (ocr-det.onnx)
+      // Run on non-avatar canvases (satellite imagery, certificates, forms)
+      // If a signature stroke box already covered the signature, skip redundant tiny character boxes
       if (!isAvatarCanvas && this.ocrDetSession) {
         try {
           const textRegions = await this.inferDBNetText(imgData, width, height, index);
           if (textRegions.length > 0) {
             for (const tr of textRegions) {
+              // If we already redacted a signature stroke box, skip text regions that fall inside or overlap with it
+              if (strokeBox && this.computeIoU(
+                { x: tr.x, y: tr.y, w: tr.width, h: tr.height },
+                { x: strokeBox.x, y: strokeBox.y, w: strokeBox.w, h: strokeBox.h }
+              ) > 0.05) {
+                continue;
+              }
+              // If on a dedicated signature pad where whole canvas is the drawing area, skip spurious noise
+              if (isSignatureContext && !canvas.closest('.dsc-box')) {
+                continue;
+              }
               detectedRegions.push(tr);
               this.burnPixelRedaction(ctx, tr.x, tr.y, tr.width, tr.height, 'CANVAS TEXT REDACTED');
             }
           }
         } catch (ocrErr) {
           console.error('[VisionEngine] DBNet text detection error:', ocrErr);
-        }
-      }
-
-      // 3. Handwritten Signature / Digital Signature Certificate (DSC) Pass
-      // Target signature pads and DSC certificate areas
-      if (isSignatureCanvas) {
-        const strokeBox = this.detectStrokeBoundingBox(imgData);
-        if (strokeBox) {
-          detectedRegions.push({
-            id: `sig_${index}`,
-            type: 'SIGNATURE',
-            x: strokeBox.x,
-            y: strokeBox.y,
-            width: strokeBox.w,
-            height: strokeBox.h,
-            confidence: 0.96,
-            token: `<REDACTED_SIGNATURE_${index + 1}>`
-          });
-          this.burnPixelRedaction(ctx, strokeBox.x, strokeBox.y, strokeBox.w, strokeBox.h, 'DIGITAL SIGNATURE REDACTED');
-        } else {
-          // Dedicated signature canvas fallback: guarantee that drawn signature area is 100% hidden
-          const sigFallback = { x: 10, y: 15, w: width - 20, h: Math.round(height * 0.70) };
-          detectedRegions.push({
-            id: `sig_fallback_${index}`,
-            type: 'SIGNATURE',
-            x: sigFallback.x,
-            y: sigFallback.y,
-            width: sigFallback.w,
-            height: sigFallback.h,
-            confidence: 0.95,
-            token: `<REDACTED_SIGNATURE_${index + 1}>`
-          });
-          this.burnPixelRedaction(ctx, sigFallback.x, sigFallback.y, sigFallback.w, sigFallback.h, 'DIGITAL SIGNATURE REDACTED');
         }
       }
     }
@@ -607,10 +618,10 @@ export class OnDeviceVisionEngine {
         const b = pixels[idx + 2];
         const a = pixels[idx + 3];
 
-        // Pen ink: dark color (brightness < 120) with non-transparent alpha (> 50)
-        // Avoid counting dark background of deep space maps (#040d1a: r < 15, g < 20, b < 35, w > 300)
+        // Pen ink: dark or colored ink (brightness < 150) with non-transparent alpha (> 30)
+        // Avoid counting dark background of deep space telemetry maps (#040d1a: r < 15, g < 20, b < 35, w > 300)
         const brightness = (r + g + b) / 3;
-        if (a > 50 && brightness < 120 && !(r < 15 && g < 20 && b < 35 && w > 300)) {
+        if (a > 30 && brightness < 150 && !(r < 15 && g < 20 && b < 35 && w > 300)) {
           strokeCount++;
           if (x < minX) minX = x;
           if (x > maxX) maxX = x;
@@ -620,9 +631,9 @@ export class OnDeviceVisionEngine {
       }
     }
 
-    // Minimum 15 stroke samples to count as genuine pen strokes
-    if (strokeCount >= 15 && maxX > minX && maxY > minY) {
-      const pad = 10;
+    // Minimum 10 stroke samples to count as genuine pen strokes
+    if (strokeCount >= 10 && maxX > minX && maxY > minY) {
+      const pad = 16;
       const bx = Math.max(0, minX - pad);
       const by = Math.max(0, minY - pad);
       const bw = Math.min(w - bx, (maxX - minX) + pad * 2);
@@ -676,6 +687,26 @@ export class OnDeviceVisionEngine {
     ctx.fillText('ZERO-EGRESS LOCAL REDACTION', x + w / 2, y + h / 2 + 10);
 
     ctx.restore();
+  }
+
+  // Verifies if a canvas actually contains opaque blackout pixels (#0f172a)
+  public isCanvasActivelyRedacted(canvas: HTMLCanvasElement): boolean {
+    try {
+      const ctx = canvas.getContext('2d');
+      if (!ctx || canvas.width === 0 || canvas.height === 0) return false;
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const d = imgData.data;
+      let blackoutCount = 0;
+      for (let i = 0; i < d.length; i += 16) {
+        if (d[i+3] === 255 && d[i] >= 10 && d[i] <= 20 && d[i+1] >= 18 && d[i+1] <= 28 && d[i+2] >= 36 && d[i+2] <= 48) {
+          blackoutCount++;
+          if (blackoutCount >= 25) return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      return true;
+    }
   }
 }
 

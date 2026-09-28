@@ -4,6 +4,8 @@
   "description": "On-Device Privacy-Preserving Browser Agent for SIH26171 (ISRO)",
   "type": "module",
   "scripts": {
+    "setup:models": "node ../scripts/download_models.mjs",
+    "prebuild": "npm run setup:models",
     "dev": "vite build --watch",
     "build": "tsc && vite build",
     "test": "node --test ../testbed/automated-tests/privacy.test.mjs",

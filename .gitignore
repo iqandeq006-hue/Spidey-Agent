@@ -70,6 +70,9 @@ build/
 *.xpi
 extension/dist/
 
+# Large model binaries (>50MB) - generated via scripts/export_omniparser.py
+extension/public/models/omniparser_icon_detect.onnx
+
 # ------------------------------------------
 # Python Server (server/)
 # ------------------------------------------

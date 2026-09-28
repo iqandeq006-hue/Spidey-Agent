@@ -23,8 +23,13 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-:: 3. Build Extension
-echo [1/4] Building Chrome MV3 Extension (TypeScript + Vite)...
+:: 3. Verify On-Device Neural Models
+echo [1/5] Verifying On-Device Neural Vision Models...
+node scripts/download_models.mjs
+echo.
+
+:: 4. Build Extension
+echo [2/5] Building Chrome MV3 Extension (TypeScript + Vite)...
 cd extension
 call npm run build
 if %ERRORLEVEL% NEQ 0 (

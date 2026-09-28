@@ -138,6 +138,14 @@ export class LocalInversionVault {
       case 'CONFIDENTIAL_NUM': return 'CONFIDENTIAL_VAL';
       case 'PERSON': return 'PERSON';
       case 'USERNAME': return 'USERNAME';
+      case 'ADDRESS': return 'ADDRESS';
+      case 'DOB': return 'DOB';
+      case 'GENDER': return 'GENDER';
+      case 'PREFERENCE': return 'PREFERENCE';
+      case 'DOCUMENT': return 'DOCUMENT';
+      case 'LOCATION': return 'LOCATION';
+      case 'CONFIDENTIAL_TEXT': return 'CONFIDENTIAL';
+      case 'COMPANY': return 'COMPANY';
       case 'CANVAS_SIGNATURE': return 'REDACTED_SIGNATURE';
       case 'AVATAR_FACE': return 'REDACTED_AVATAR';
       default: return 'PROTECTED_DATA';

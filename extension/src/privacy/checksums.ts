@@ -108,7 +108,7 @@ const GREETING_NAME_REGEX = /(?:welcome|hello|hi),\s+([A-Z][a-z]+(?:\s+[A-Z][a-z
 
 // Master classifier function: checks a given text and returns its detected PII type & confidence
 export interface ChecksumMatch {
-  type: 'AADHAAR' | 'PAN' | 'GSTIN' | 'CARD' | 'EMAIL' | 'PHONE' | 'PASSPORT' | 'CONFIDENTIAL_NUM' | 'USERNAME' | 'PERSON';
+  type: 'AADHAAR' | 'PAN' | 'GSTIN' | 'CARD' | 'EMAIL' | 'PHONE' | 'PASSPORT' | 'CONFIDENTIAL_NUM' | 'USERNAME' | 'PERSON' | 'ADDRESS' | 'DOB' | 'GENDER' | 'PREFERENCE' | 'DOCUMENT' | 'LOCATION' | 'CONFIDENTIAL_TEXT' | 'COMPANY';
   cleanValue: string;
   confidence: number;
 }

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SentryAgent — Testing Launchpad</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card: #111827;
+      --border: #1f2937;
+      --text: #f9fafb;
+      --text-muted: #9ca3af;
+      --accent: #38bdf8;
+    }
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    p.subtitle {
+      color: var(--text-muted);
+      margin-top: 0;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      transition: all 0.2s ease;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .info h3 {
+      margin: 0 0 4px 0;
+      font-size: 16px;
+    }
+    .info p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #0b0f19;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .btn:hover {
+      background: #7dd3fc;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🛡️ SentryAgent Testing Launchpad</h1>
+    <p class="subtitle">Direct links to test forms, data tables, digital signatures, and government portals with SentryAgent.</p>
+
+    <div class="grid">
+      <!-- 1. Forms -->
+      <div class="card">
+        <div class="info">
+          <span class="badge">COMPLEX FORMS</span>
+          <h3>DemoQA Automation Practice Form</h3>
+          <p>Names, Email, Gender radio, Mobile, Date of Birth, Subjects, Hobbies, Picture, Address, State & City.</p>
+        </div>
+        <a class="btn" href="https://demoqa.com/automation-practice-form" target="_blank" rel="noopener">Open Site ↗</a>
+      </div>
+
+      <!-- 2. Tables -->
+      <div class="card">
+        <div class="info">
+          <span class="badge">DATA TABLES</span>
+          <h3>W3Schools HTML Tables</h3>
+          <p>Customer data table with Company, Contact, and Country column records.</p>
+        </div>
+        <a class="btn" href="https://www.w3schools.com/html/html_tables.asp" target="_blank" rel="noopener">Open Site ↗</a>
+      </div>
+
+      <div class="card">
+        <div class="info">
+          <span class="badge">LARGE DATA TABLES</span>
+          <h3>Wikipedia — List of Space Agencies</h3>
+          <p>Large-scale structured table with Agencies, Countries, Dates, and Budgets.</p>
+        </div>
+        <a class="btn" href="https://en.wikipedia.org/wiki/List_of_space_agencies" target="_blank" rel="noopener">Open Site ↗</a>
+      </div>
+
+      <!-- 3. Signatures -->
+      <div class="card">
+        <div class="info">
+          <span class="badge">CANVAS & SIGNATURES</span>
+          <h3>Signature Pad Proving Ground</h3>
+          <p>HTML5 Canvas drawing pad for testing on-device signature neural vision & CCL redaction.</p>
+        </div>
+        <a class="btn" href="https://szimek.github.io/signature_pad/" target="_blank" rel="noopener">Open Site ↗</a>
+      </div>
+
+      <!-- 4. Govt Portals -->
+      <div class="card">
+        <div class="info">
+          <span class="badge">GOVERNMENT PORTAL</span>
+          <h3>ISRO Official Portal</h3>
+          <p>Official portal for space missions and satellite announcements.</p>
+        </div>
+        <a class="btn" href="https://www.isro.gov.in" target="_blank" rel="noopener">Open Site ↗</a>
+      </div>
+
+      <div class="card">
+        <div class="info">
+          <span class="badge">TENDER PROCUREMENT</span>
+          <h3>Central Public Procurement Portal (CPPP)</h3>
+          <p>Government tender contracts, bidding documents, and GSTIN numbers.</p>
+        </div>
+        <a class="btn" href="https://eprocure.gov.in" target="_blank" rel="noopener">Open Site ↗</a>
+      </div>
+
+      <div class="card">
+        <div class="info">
+          <span class="badge">TAX & AADHAAR</span>
+          <h3>Income Tax India e-Filing</h3>
+          <p>PAN, 12-digit Aadhaar input fields with Verhoeff checksum validation.</p>
+        </div>
+        <a class="btn" href="https://www.incometax.gov.in" target="_blank" rel="noopener">Open Site ↗</a>
+      </div>
+
+      <!-- 5. Local Testbed -->
+      <div class="card">
+        <div class="info">
+          <span class="badge">LOCAL SIH PROVING GROUND</span>
+          <h3>ISRO Enterprise Services (Local Simulation)</h3>
+          <p>Local simulation with e-Procurement tenders, HR employee Aadhaar records, and ISTRAC telemetry.</p>
+        </div>
+        <a class="btn" href="index.html" target="_blank">Open Local ↗</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

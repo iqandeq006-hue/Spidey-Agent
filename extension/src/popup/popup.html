@@ -3,139 +3,184 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SentryAgent Co-Pilot</title>
+  <title>SentryAgent</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="popup-container">
-    <!-- Compact Header -->
-    <header class="popup-header">
-      <div class="header-brand">
-        <div class="shield-icon">🛡️</div>
-        <div>
-          <div class="app-name">SentryAgent</div>
-          <div class="app-sub" id="header-status-sub">Zero-Egress On-Device Co-Pilot</div>
+  <div class="app-layout">
+    <!-- Clean Minimalist Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">SentryAgent</span>
+          <span class="brand-status">Browser Co-Pilot</span>
         </div>
       </div>
-      <div class="header-controls">
-        <button id="btn-open-spotlight" title="Toggle In-Page Spotlight (Ctrl+Shift+K)" class="hdr-btn">⚡ HUD</button>
-        <button id="btn-dock-sidepanel" title="Dock to Chrome Side Panel" class="hdr-btn">◫ Dock</button>
-        <div class="egress-pill" id="egress-indicator" title="All operations strictly local on-device">
-          <span class="dot"></span> ZERO EGRESS
-        </div>
-      </div>
+
+      <!-- Segmented Navigation: Chat vs Logs -->
+      <nav class="nav-segmented">
+        <button class="nav-tab active" id="tab-btn-chat" data-tab="chat">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>Chat</span>
+        </button>
+        <button class="nav-tab" id="tab-btn-logs" data-tab="logs">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          <span>Logs</span>
+          <span id="log-count-badge" class="nav-badge">0</span>
+        </button>
+      </nav>
     </header>
 
-    <!-- Top Segment Switcher (Chat vs Telemetry vs Vault) -->
-    <nav class="tab-switch-bar">
-      <button class="tab-btn active" id="tab-btn-chat" data-tab="chat">
-        <span>💬 Co-Pilot</span>
-      </button>
-      <button class="tab-btn" id="tab-btn-logs" data-tab="logs">
-        <span>📜 Telemetry</span>
-      </button>
-      <button class="tab-btn" id="tab-btn-vault" data-tab="vault">
-        <span>🔐 Vault <span id="vault-tab-badge" class="mini-badge">0</span></span>
-      </button>
-    </nav>
-
-    <!-- TAB 1: Conversational Co-Pilot Chat View (Primary Unclustered Screen) -->
-    <section class="tab-pane active" id="pane-chat">
-      <!-- Quick Status Strip -->
-      <div class="quick-status-strip">
-        <div class="status-chip" id="chip-perimeter">
-          <span class="status-dot green"></span> <span id="strip-perimeter-text">Perimeter Active</span>
-        </div>
-        <div class="status-chip" id="chip-redacted">
-          <span>🛡️ <strong id="strip-redacted-count">0</strong> Redacted</span>
-        </div>
-        <div class="status-chip" id="chip-speed">
-          <span>⚡ <strong id="strip-latency">0.8ms</strong> Fast-Path</span>
-        </div>
-      </div>
-
-      <!-- Chat Stream Messages Container -->
-      <div class="chat-stream" id="chat-stream">
-        <!-- Welcome Card -->
-        <div class="chat-msg msg-agent">
-          <div class="msg-avatar">🛡️</div>
-          <div class="msg-body">
-            <div class="msg-author">Sentry Co-Pilot</div>
-            <div class="msg-text">
-              I am your on-device browser co-pilot. You don't need to manually click buttons or redact fields—just tell me what to do on this page:
-            </div>
-            <div class="welcome-suggestions">
-              <button class="prompt-chip" data-prompt="protect page">🛡️ Protect Page (Redact PII)</button>
-              <button class="prompt-chip" data-prompt="submit the procurement bid">🤖 Auto-Execute Procurement Task</button>
-              <button class="prompt-chip" data-prompt="search cryogenic engine">🔍 Search Active Website</button>
-              <button class="prompt-chip" data-prompt="restore DOM">🔄 Restore Original Page</button>
-            </div>
+    <!-- TAB 1: Conversational Chat Interface (Navigation, Search, Page Interaction) -->
+    <main class="pane active" id="pane-chat">
+      <div class="chat-container" id="chat-stream">
+        <!-- Welcoming Initial State -->
+        <div class="welcome-box" id="welcome-box">
+          <div class="welcome-avatar">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="m9 12 2 2 4-4"/>
+            </svg>
+          </div>
+          <h2 class="welcome-title">What would you like to do?</h2>
+          <p class="welcome-subtitle">Ask me to open any website, search the web, or navigate and click on this page.</p>
+          
+          <div class="starter-grid">
+            <button class="starter-card" data-prompt="open youtube">
+              <span class="starter-icon">🌐</span>
+              <div class="starter-info">
+                <strong>Open website</strong>
+                <small>e.g. YouTube, Wikipedia, ISRO</small>
+              </div>
+            </button>
+            <button class="starter-card" data-prompt="search latest space exploration updates">
+              <span class="starter-icon">🔍</span>
+              <div class="starter-info">
+                <strong>Search the web</strong>
+                <small>Find topics on Google</small>
+              </div>
+            </button>
+            <button class="starter-card" data-prompt="click submit">
+              <span class="starter-icon">⚡</span>
+              <div class="starter-info">
+                <strong>Interact with page</strong>
+                <small>Click buttons or fill forms</small>
+              </div>
+            </button>
+            <button class="starter-card" data-prompt="protect page">
+              <span class="starter-icon">🛡️</span>
+              <div class="starter-info">
+                <strong>Protect page</strong>
+                <small>Redact sensitive data on-device</small>
+              </div>
+            </button>
           </div>
         </div>
       </div>
 
-      <!-- Chat Bottom Input Dock -->
-      <div class="chat-input-dock">
-        <div class="quick-pill-row">
-          <button class="quick-pill" data-prompt="protect this page">🛡️ Protect</button>
-          <button class="quick-pill" data-prompt="automate this form">🤖 Auto-Run</button>
-          <button class="quick-pill" data-prompt="click submit">⚡ Click Submit</button>
-          <button class="quick-pill" data-prompt="restore">↺ Restore</button>
-        </div>
-        <div class="input-bar">
+      <!-- Clean Floating Chat Input Bar -->
+      <footer class="chat-dock">
+        <form id="chat-form" class="input-form">
           <input 
             type="text" 
             id="chat-input" 
-            placeholder="Type any task: 'search ...', 'click ...', 'protect', 'fill pan'..." 
+            placeholder="Ask to search, open a site, or control this page..." 
             autocomplete="off" 
             spellcheck="false"
           />
-          <button id="btn-chat-send" title="Send (Enter)">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+          <button type="submit" id="btn-chat-send" title="Send" aria-label="Send message">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
               <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </form>
+      </footer>
+    </main>
+
+    <!-- TAB 2: Dedicated Log Space (Telemetry, Activity, and Security Audit) -->
+    <section class="pane" id="pane-logs" style="display: none;">
+      <!-- Log Controls Bar -->
+      <div class="logs-toolbar">
+        <div class="log-filters">
+          <button class="filter-btn active" data-filter="ALL">All</button>
+          <button class="filter-btn" data-filter="NAVIGATOR">Nav</button>
+          <button class="filter-btn" data-filter="EXECUTION">Actions</button>
+          <button class="filter-btn" data-filter="SECURITY">Security</button>
+        </div>
+        <div class="log-actions">
+          <button class="action-icon-btn" id="btn-export-logs" title="Export audit log JSON">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          <button class="action-icon-btn" id="btn-clear-logs" title="Clear logs">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             </svg>
           </button>
         </div>
       </div>
-    </section>
 
-    <!-- TAB 2: Observability Telemetry Logs -->
-    <section class="tab-pane" id="pane-logs" style="display: none;">
-      <div class="log-filter-bar">
-        <div class="filter-chips">
-          <button class="filter-chip active" data-filter="ALL">All</button>
-          <button class="filter-chip" data-filter="SECURITY">Security</button>
-          <button class="filter-chip" data-filter="DECISION">Decision</button>
-          <button class="filter-chip" data-filter="PERCEPTION">Vision</button>
-          <button class="filter-chip" data-filter="NAVIGATOR">Nav</button>
-          <button class="filter-chip" data-filter="EXECUTION">Exec</button>
+      <!-- Logs Scroll Area -->
+      <div class="logs-scroll" id="log-list">
+        <div class="empty-state">No logs recorded yet. Use the Chat to perform navigation or actions.</div>
+      </div>
+
+      <!-- Clean Collapsible Vault Summary in Log Space -->
+      <div class="vault-panel" id="vault-panel">
+        <div class="vault-summary-header" id="vault-toggle">
+          <div class="vault-title-group">
+            <span class="vault-icon">🔐</span>
+            <span>Local Vault</span>
+          </div>
+          <span class="vault-count-badge" id="vault-count-badge">0 protected</span>
         </div>
-        <div class="log-actions-bar">
-          <button class="log-btn-small" id="btn-export-logs" title="Export audit trail as JSON">📥 Export</button>
-          <button class="log-btn-small" id="btn-clear-logs" title="Clear log history">↺ Clear</button>
+        <div class="vault-drawer" id="vault-drawer" style="display: none;">
+          <div class="vault-list" id="vault-list">
+            <div class="empty-vault-text">No sensitive data currently vaulted on this page.</div>
+          </div>
+          <!-- Redaction Proof Screenshot in Vault -->
+          <div class="vault-proof-section" id="vault-proof-section" style="display: none;">
+            <div class="proof-section-header">
+              <span>📸 Redacted Page Visual Proof:</span>
+            </div>
+            <div class="proof-preview-wrapper" id="vault-proof-wrapper">
+              <img id="vault-proof-img" class="vault-proof-img" src="" alt="Redacted Proof" />
+              <div class="proof-overlay-tag">🔍 Click to Expand</div>
+            </div>
+          </div>
         </div>
       </div>
-      <div class="log-list" id="log-list">
-        <div class="log-empty">Telemetry stream ready. Actions will log here in real time.</div>
-      </div>
     </section>
 
-    <!-- TAB 3: Local Inversion Vault Inspector -->
-    <section class="tab-pane" id="pane-vault" style="display: none;">
-      <div class="vault-header">
-        <span class="section-title">Local Inversion Vault</span>
-        <span class="badge" id="vault-count-badge">0 Active</span>
+    <!-- Visual Proof Lightbox Modal -->
+    <div id="proof-modal" class="proof-modal" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-text">
+            <span>🛡️ Redacted Page Visual Proof (On-Device Verified)</span>
+          </div>
+          <button id="btn-close-modal" class="modal-close-btn" title="Close preview">&times;</button>
+        </div>
+        <div class="modal-body">
+          <img id="modal-proof-img" class="modal-proof-img" src="" alt="Redacted Proof Full" />
+        </div>
       </div>
-      <div class="vault-list" id="vault-list">
-        <div class="vault-empty">No sensitive values currently vaulted. Tell the Co-Pilot to "protect page" or fill a form to encrypt fields locally.</div>
-      </div>
-    </section>
-
-    <!-- Compact Footer -->
-    <footer class="popup-footer">
-      <span>Verhoeff • Luhn • System-1 Engine</span>
-      <span class="version-tag">v2.5 (Zero-Server Ready)</span>
-    </footer>
+    </div>
   </div>
 
   <script type="module" src="popup.ts"></script>
