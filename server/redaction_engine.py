@@ -295,8 +295,9 @@ def redact_and_capture(portal="hr", custom_url=None):
     if not chrome_exe:
         raise RuntimeError("No compatible browser (Chrome/Edge) found on system.")
 
-    testbed_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "testbed"))
-    index_html = os.path.join(testbed_dir, "index.html")
+    repo_root = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+    redact_dir = os.path.join(repo_root, "redact")
+    os.makedirs(redact_dir, exist_ok=True)
     
     redaction_js = build_universal_redaction_js(portal=portal)
 
@@ -307,15 +308,12 @@ def redact_and_capture(portal="hr", custom_url=None):
             with urllib.request.urlopen(req, timeout=10) as resp:
                 raw_html = resp.read().decode("utf-8", errors="ignore")
         except Exception:
-            # Fallback to local index if remote fetch blocked
-            with open(index_html, "r", encoding="utf-8") as f:
-                raw_html = f.read()
+            raw_html = "<html><body><h1>SpideyAgent Privacy Airlock</h1></body></html>"
     elif custom_url and os.path.exists(custom_url):
         with open(custom_url, "r", encoding="utf-8") as f:
             raw_html = f.read()
     else:
-        with open(index_html, "r", encoding="utf-8") as f:
-            raw_html = f.read()
+        raw_html = "<html><body><h1>SpideyAgent Privacy Airlock</h1></body></html>"
 
     # Inject <base href> for remote sites so styles and fonts load properly
     if custom_url and (custom_url.startswith("http://") or custom_url.startswith("https://")):
@@ -342,14 +340,9 @@ def redact_and_capture(portal="hr", custom_url=None):
     else:
         modified_html = raw_html + f"<script>{redaction_js}</script>"
     
-    redacted_html_path = os.path.join(testbed_dir, "redacted_live_session.html")
+    redacted_html_path = os.path.join(redact_dir, "redacted_live_session.html")
     with open(redacted_html_path, "w", encoding="utf-8") as f_out:
         f_out.write(modified_html)
-
-    # Redact folder inside repository for user output & proof
-    repo_root = os.path.normpath(os.path.join(testbed_dir, ".."))
-    redact_dir = os.path.join(repo_root, "redact")
-    os.makedirs(redact_dir, exist_ok=True)
 
     if custom_url:
         parsed = urllib.parse.urlparse(custom_url)
@@ -360,7 +353,6 @@ def redact_and_capture(portal="hr", custom_url=None):
 
     screenshot_path = os.path.join(redact_dir, f"{file_base}.png")
     latest_screenshot_path = os.path.join(redact_dir, "redacted_latest.png")
-    testbed_screenshot_path = os.path.join(testbed_dir, "redacted_profile_screenshot.png")
     
     # Run Chrome headless to capture the final rendered screenshot directly into root redact directory
     file_url = f"file:///{redacted_html_path.replace(os.sep, '/')}"
@@ -382,7 +374,6 @@ def redact_and_capture(portal="hr", custom_url=None):
     # Also keep synchronized copy at redacted_latest.png and in testbed
     try:
         shutil.copy2(screenshot_path, latest_screenshot_path)
-        shutil.copy2(screenshot_path, testbed_screenshot_path)
     except Exception:
         pass
 

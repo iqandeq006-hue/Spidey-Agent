@@ -86,62 +86,190 @@ SpideyAgent integrates **Laya** ([`convaiinnovations/laya`](https://huggingface.
 
 ## 🏛️ System Architecture
 
+### High-Level Data Flow
+
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#1f2937', 'edgeLabelBackground':'#111827', 'tertiaryColor': '#111827'}}}%%
 flowchart TD
-    subgraph ClientSandbox ["  🛡️ TRUSTED CLIENT SANDBOX (Chrome MV3 / On-Device)  "]
-        RawInput["Raw Webpage DOM & HTML5 Canvas Elements"]
+    subgraph BROWSER ["BROWSER - Chrome MV3 Extension"]
 
-        subgraph NeuralPerception ["  🧠 Dual-Track Neural Perception Engine  "]
-            BlazeFace["BlazeFace ONNX (Face Biometric Blackout)"]
-            DBNet["DBNet ONNX + BFS CCL (Signature Pad & Text Segmentation)"]
-            OmniParser["OmniParser v2.0 (Canvas Icons & UI Element Grounding)"]
-            YOLOS["Quantized Vision Transformer (ViT q4 Visual Layout)"]
-            MathEngines["Mathematical Checksums (Verhoeff D5, Luhn, ISO Mod-36)"]
+        subgraph INJECT ["Injection Layer"]
+            DOM["Raw DOM + HTML5 Canvas"]
+            Spotlight["Spotlight HUD - content.ts"]
         end
 
-        subgraph ZeroTrustFirewall ["  🔒 Zero-Trust Privacy Boundary  "]
-            WeakSetQuarantine["WeakSet<Node> DOM Object Memory Quarantine"]
-            OriginVault["Origin-Locked Cryptographic Vault"]
-            HITLGate["Human-in-the-Loop (HITL) Physical Secret Guard"]
+        subgraph PERCEPTION ["Neural Perception - visionEngine.ts"]
+            BF["BlazeFace ONNX - Face Blackout - 536KB / 2.1ms"]
+            DB["DBNet ONNX - Signature Pad Text - 4.75MB / 6.9ms"]
+            OM["OmniParser v2 - UI Icon Grounding - 76.7MB / 28ms"]
+            YO["YOLOS-ViT q4 - Visual Layout - 7.45MB / 18.5ms"]
         end
 
-        SanitizedGraph["Opaque Semantic Scene Graph (Zero Raw Pixels)"]
-
-        subgraph ClientAudit ["  ⚡ Laya On-Device Safety Gate  "]
-            LayaONNX["Laya System-1 ONNX Model (<2ms Forward Pass)"]
+        subgraph PRIVACY ["Privacy Firewall - backend/privacy/"]
+            CHK["checksums.ts - Verhoeff D5 / Luhn / ISO 7064 Mod-36"]
+            SB["structuralBoundary.ts - WeakSet DOM Quarantine"]
+            VLT["vault.ts - Origin-Locked Token Store"]
+            SCG["staticContentGeneralizer.ts - PII Token Replacement"]
+            GAZ["gazetteer.ts - Named-Entity Recognition"]
         end
 
-        HardwareDispatcher["Chrome CDP Hardware Event Dispatcher"]
+        SANITIZED["Opaque Semantic Scene Graph - Zero Raw Pixels - SHA-256 Digest"]
+
+        subgraph AUDIT ["On-Device Safety Gate - system1Engine.ts"]
+            S1["laya_system1_int8.onnx - Non-Autoregressive Audit - 18.7KB / 2ms"]
+        end
+
+        subgraph DISPATCH ["Action Dispatch - execution/"]
+            AD["actionDispatcher.ts - Action Router and Serializer"]
+            CDP["cdpDispatcher.ts - Chrome DevTools Protocol"]
+            NAV["deterministicNavigator.ts - Replay and Navigation Plan"]
+            HITL["HITL Physical Gate - vault.ts"]
+        end
+
+        subgraph NETCTL ["Egress Control - backend/network/"]
+            EV["egressVerifier.ts - Zero-Egress Enforcement"]
+            OL["observabilityLogger.ts - Local-Only Audit Trail"]
+            SHL["selfHealingAuditor.ts - Assertion Monitor"]
+        end
+
+        BG["background.ts - Service Worker Event Bus"]
     end
 
-    subgraph ReasonerCore ["  🧠 HYBRID DECISION ENGINE (Server / Edge)  "]
-        subgraph LayaCore ["  🚀 Fast-Path: Laya Decision Engine (~30ms)  "]
-            LayaModel["Laya Non-Autoregressive Model (convaiinnovations/laya)"]
+    subgraph SERVER ["REASONING SERVER - server/app.py - Port 8000"]
+
+        subgraph LAYA_ROUTER ["Laya Router - Fast Path - 30ms"]
+            LR["Router.predict - Script Detection and Language Routing"]
+            LA["laya Agent - ModernBERT-large 421M - English"]
+            LM["laya-multilingual - mmBERT-base 322M - 100plus Languages"]
         end
-        subgraph DeepPlanner ["  🐢 Slow-Path: Multihop Planner (Optional Fallback)  "]
-            LLMBackend["LLM Provider (Groq / Ollama / OpenAI / Rule-Based)"]
+
+        subgraph PLANNER ["Multihop Planner - Slow Path - Optional"]
+            LLM["LLM Backend - Groq / Ollama / OpenAI / Rule-Based"]
         end
+
+        RE["redaction_engine.py - Headless Playwright - redact/before and after"]
     end
 
-    subgraph ExternalAgents ["  🔌 AI DEVELOPER TOOLS & IDES  "]
-        MCPServer["Model Context Protocol Server (server/mcp_server.py)"]
+    subgraph MCP ["MCP SERVER - server/mcp_server.py - stdio"]
+        MCP1["browser_get_sanitized_state - Live DOM with PII Tokens"]
+        MCP2["protect url - One-Command Privacy Auditor"]
     end
 
-    RawInput --> NeuralPerception
-    NeuralPerception --> ZeroTrustFirewall
-    ZeroTrustFirewall --> SanitizedGraph
-    SanitizedGraph -- "Sanitized Tokens Only (SHA-256 Digest)" --> LayaModel
-    SanitizedGraph -. "stdio JSON-RPC" .-> MCPServer
-    
-    LayaModel -->|Routine Decisions (<30ms)| LayaONNX
-    LayaModel -.->|Complex Multihop Decomposition| LLMBackend
-    LLMBackend --> LayaONNX
+    BG --> Spotlight
+    Spotlight --> DOM
+    DOM --> BF
+    DOM --> DB
+    DOM --> OM
+    DOM --> YO
+    BF --> CHK
+    DB --> CHK
+    OM --> SB
+    YO --> SB
+    CHK --> SCG
+    SB --> SCG
+    VLT --> SCG
+    GAZ --> SCG
+    SCG --> SANITIZED
 
-    LayaONNX -->|TIER_1 / TIER_2 (Safe Action)| HardwareDispatcher
-    LayaONNX -->|TIER_4 (Statutory/Financial Action)| HITLGate
-    HITLGate -->|Manual Human Physical Approval| HardwareDispatcher
-    HardwareDispatcher -->|Execute Hardware Event| RawInput
+    SANITIZED -- "Tokens plus SHA-256 Digest" --> LR
+    SANITIZED -. "stdio JSON-RPC" .-> MCP1
+    SANITIZED --> EV
+
+    LR --> LA
+    LR --> LM
+    LA --> S1
+    LM --> S1
+    LR -.-> LLM
+    LLM --> S1
+
+    S1 -- "TIER 1 and 2 - Safe Action" --> AD
+    S1 -- "TIER 4 - Statutory or Financial" --> HITL
+    HITL -- "Human Physical Approval" --> AD
+    AD --> CDP
+    AD --> NAV
+    CDP --> DOM
+
+    EV --> OL
+    EV --> SHL
+
+    RE --> MCP2
+```
+
+---
+
+### 📂 Codebase Logic Map
+
+Every source file mapped to its architectural role in the pipeline:
+
+| Layer | Module / File | Role in Pipeline |
+|:------|:-------------|:-----------------|
+| **Injection** | `extension/src/content/content.ts` | Injects Spotlight HUD, intercepts DOM mutations, orchestrates the full client pipeline |
+| **Background SW** | `extension/src/backend/background/background.ts` | Service Worker event bus — manages tab lifecycle, routes messages between content ↔ server |
+| **Perception** | `extension/src/backend/vision/visionEngine.ts` | Orchestrates all 4 ONNX model inferences over `<canvas>` and visible DOM |
+| **Perception** | `extension/src/backend/vision/sentryPipeline.ts` | Sequential model-run pipeline with pixel burnout callbacks |
+| **Perception** | `extension/src/backend/vision/spatialClassifier.ts` | Maps bounding boxes to DOM regions for mask application |
+| **Perception** | `extension/src/backend/vision/uiElementLocator.ts` | OmniParser / YOLOS UI element coordinate locator |
+| **Privacy** | `extension/src/backend/privacy/structuralBoundary.ts` | `WeakSet<Node>` quarantine — prevents V8 serialization of sensitive nodes |
+| **Privacy** | `extension/src/backend/privacy/vault.ts` | Origin-locked token vault; HITL guard for passwords & OTPs |
+| **Privacy** | `extension/src/backend/privacy/checksums.ts` | Verhoeff D5 (Aadhaar), Luhn (card), ISO 7064 Mod-36 (GSTIN) validation |
+| **Privacy** | `extension/src/backend/privacy/staticContentGeneralizer.ts` | Replaces detected PII with opaque semantic tokens (`<AADHAAR>`, `<PERSON>`) |
+| **Privacy** | `extension/src/backend/privacy/gazetteer.ts` | Named-entity recognizer for person names, addresses, org names |
+| **Network** | `extension/src/backend/network/egressVerifier.ts` | Hard assertion: blocks any serialization containing raw PII bytes |
+| **Network** | `extension/src/backend/network/observabilityLogger.ts` | Local-only structured audit trail (never exfiltrated) |
+| **Network** | `extension/src/backend/network/selfHealingAuditor.ts` | Post-action invariant checker; re-triggers scrubbing on DOM mutation |
+| **Safety Gate** | `extension/src/backend/execution/system1Engine.ts` | Loads & runs `laya_system1_int8.onnx` — classifies action risk in **<2 ms** |
+| **Safety Gate** | `extension/src/backend/execution/system1DecisionEngine.ts` | Maps Laya output probabilities to TIER_1 / TIER_2 / TIER_4 decision labels |
+| **Dispatch** | `extension/src/backend/execution/actionDispatcher.ts` | Serializes approved plan steps; routes TIER_4 to HITL, rest to CDP |
+| **Dispatch** | `extension/src/backend/execution/cdpDispatcher.ts` | Injects trusted hardware-level events via Chrome DevTools Protocol |
+| **Dispatch** | `extension/src/backend/execution/deterministicNavigator.ts` | Replay engine for multi-step goal decomposition plans |
+| **Server** | `server/app.py` | FastAPI reasoning server; instantiates Laya `Router`, exposes `/plan` endpoint |
+| **Server** | `server/mcp_server.py` | stdio JSON-RPC MCP server (`protect`, `browser_get_sanitized_state` tools) |
+| **Server** | `server/redaction_engine.py` | Headless Playwright runner; outputs `redact/before/*.png` + `redact/after/*.jpeg` |
+| **Models** | `extension/public/models/laya_system1_int8.onnx` | INT8 quantized on-device Laya decision classifier (18.7 KB) |
+| **Models** | `extension/public/models/blazeface.onnx` | Sub-millisecond face detector (536 KB) |
+| **Models** | `extension/public/models/dbnet.onnx` | Differentiable binarization text detector (4.75 MB) |
+| **Models** | `extension/public/models/omniparser.onnx` | GUI element grounding model (76.7 MB) |
+| **Models** | `extension/public/models/yolos_tiny_q4.onnx` | Quantized Vision Transformer (7.45 MB) |
+
+---
+
+### 🔄 Laya Decision Engine — Internal Data Path
+
+Mirroring Laya's `Router → Agent → forward_pass` architecture ([reference.md](reference.md)):
+
+```
+User Goal String  ──►  server/app.py (Router)
+                              │
+                    ┌─────────▼──────────────────────────────┐
+                    │  Script & Language Detection (<0.5 ms)  │
+                    │  laya.router.detect_script()            │
+                    └──────┬──────────────────┬──────────────┘
+                           │ Latin/English     │ Non-Latin / Multilingual
+                           ▼                  ▼
+                     laya Agent          laya-multilingual Agent
+                   (ModernBERT-L)        (mmBERT-base · 100+ lang)
+                     421M params          322M params · up to 8192 tok
+                           │                  │
+                           └──────┬───────────┘
+                                  │  Single Forward Pass (~30 ms)
+                                  ▼
+                        Typed Decision Output
+                        ┌──────────────────────────────────┐
+                        │  choice  → target DOM node ID    │
+                        │  score   → action urgency tier   │
+                        │  noul    → P(sensitive action)   │
+                        └──────────────┬───────────────────┘
+                                       │
+                                       ▼
+                          extension/  system1Engine.ts
+                          laya_system1_int8.onnx  (<2 ms)
+                          ┌──────────────────────────┐
+                          │  TIER_1 → safe click      │
+                          │  TIER_2 → form fill       │
+                          │  TIER_4 → HITL required   │
+                          └──────────┬────────────────┘
+                                     │
+                             cdpDispatcher.ts
+                             Chrome Hardware Event
 ```
 
 ---
@@ -250,7 +378,7 @@ All models execute **100% locally** in the browser sandbox via `onnxruntime-web`
 
 ## 📊 Empirical Benchmark Scorecard
 
-Evaluated against the standardized SIH-26171 Ground-Truth Benchmark Suite ([`testbed/benchmarks/run-benchmarks.mjs`](testbed/benchmarks/run-benchmarks.mjs)):
+Evaluated against the standardized SIH-26171 Ground-Truth Benchmark Suite:
 
 ```text
 ================================================================================
@@ -354,6 +482,46 @@ npm run test
 
 ---
 
+## 📸 Visual Verification & Evidence Gallery
+
+SpideyAgent operates as a **zero-trust, on-device privacy airlock**. The following live benchmarks illustrate raw DOM/visual viewports intercepted and scrubbed into zero-egress semantic tokens before serialization:
+
+### 1. Smart India Hackathon (SIH) Portal (`sih.gov.in`)
+*Scrubbing of login credentials, SPOC registration inputs, institutional contact numbers, and problem-statement search parameters.*
+
+| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
+| :---: | :---: |
+| <img src="redact/before/sihportal.png" alt="SIH Portal Before Redaction" width="460" /> | <img src="redact/after/sihportal.jpeg" alt="SIH Portal After Redaction" width="460" /> |
+
+---
+
+### 2. Complex Multi-Type Forms (DemoQA Practice Form)
+*Names (`<PERSON>`), email addresses, mobile numbers, dates of birth, and address controls quarantined in WeakSet memory.*
+
+| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
+| :---: | :---: |
+| <img src="redact/before/form.png" alt="Form Before Redaction" width="460" /> | <img src="redact/after/form.jpeg" alt="Form After Redaction" width="460" /> |
+
+---
+
+### 3. Structured Relational Data Tables (W3Schools HTML Tables)
+*Automated column detection and cell blackboxing across tabular business directories without distorting DOM geometry.*
+
+| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
+| :---: | :---: |
+| <img src="redact/before/tables.png" alt="Tables Before Redaction" width="460" /> | <img src="redact/after/tables.jpeg" alt="Tables After Redaction" width="460" /> |
+
+---
+
+### 4. Large-Scale Space Agency Tabular Registry (Wikipedia List of Space Agencies)
+*Dense tabular dataset parsing with automatic cell-level blackboxing across space agencies, country names, acronyms, and capabilities.*
+
+| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
+| :---: | :---: |
+| <img src="redact/before/wikipedia.png" alt="Wikipedia Space Agencies Before Redaction" width="460" /> | <img src="redact/after/wikipedia.jpeg" alt="Wikipedia Space Agencies After Redaction" width="460" /> |
+
+---
+
 ## 🚀 Quick Start
 
 ### Option 1: 1-Click Windows Presentation Launcher
@@ -361,7 +529,7 @@ Double-click:
 ```cmd
 run_demo.bat
 ```
-*In one click, this script verifies models, builds the extension, launches the local synthetic ISRO testbed on `localhost:3000`, starts the central reasoning server on `localhost:8000`, and opens Chrome.*
+*In one click, this script verifies models, builds the extension, starts the central reasoning server on `localhost:8000`, and prepares Chrome for live testing.*
 
 ---
 
@@ -374,22 +542,18 @@ npm install
 npm run build      # Compiles TypeScript + Vite bundle into extension/dist/
 ```
 
-#### 2. Start the Synthetic ISRO Testbed (Port 3000)
-```bash
-python -m http.server 3000 --directory testbed
-```
-
-#### 3. Start the Central Reasoning Server (Port 8000)
+#### 2. Start the Central Reasoning Server (Port 8000)
 ```bash
 python server/app.py
 ```
 *(Powered by the Laya decision model with deterministic rule-based planning by default; optional: set `OPENAI_API_KEY` or `GROQ_API_KEY` for multihop cloud LLMs).*
 
-#### 4. Load the Extension into Google Chrome
+#### 3. Load the Extension into Google Chrome
 1. Open Chrome and navigate to `chrome://extensions/`.
 2. Toggle **Developer mode** ON (top-right corner).
 3. Click **Load unpacked** and select the [`extension/dist`](extension/dist) folder.
-4. Visit `http://localhost:3000` to interact with the synthetic ISRO portals.
+4. Navigate to any live website (e.g. [SIH Portal](https://www.sih.gov.in), [DemoQA Practice Form](https://demoqa.com/automation-practice-form), [W3Schools Tables](https://www.w3schools.com/html/html_tables.asp)).
+5. Press <kbd>Alt</kbd> + <kbd>S</kbd> or <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>K</kbd> to activate SpideyAgent.
 
 ---
 
@@ -409,7 +573,7 @@ SIH_3/
 │   └── mcp_config.json
 ├── docs/                         # Presentation & Academic Research
 │   ├── SpideyAgent.pptx          # Official Hackathon Pitch Deck & Slides
-│   └── papers/                   # Foundational Academic Literature
+│   └── papers/                   # Foundational Academic Literature (Local PDFs)
 ├── extension/                    # Chrome MV3 Privacy-Preserving Agent Client
 │   ├── icons/                    # Project logos, icons, and avatars
 │   ├── public/models/            # Compiled standalone ONNX Neural Models
@@ -428,28 +592,60 @@ SIH_3/
 │   ├── app.py                    # Central Reasoning Server with Laya Engine
 │   ├── mcp_server.py             # Stdio Model Context Protocol Server
 │   └── redaction_engine.py       # Headless Playwright Redaction Engine
-├── test_all.bat                  # 1-Click Verification Test Runner (Windows)
-└── testbed/                      # Synthetic ISRO Intranet Evaluation Environment
-    ├── automated-tests/          # 10 Automated Security & Privacy Test Suites
-    ├── benchmarks/               # Performance & Token Savings Benchmarks
-    └── index.html                # Synthetic ISTRAC, eProcurement & HR Portals
+├── test_all.bat                  # Verification Test Suite Proof of Compliance
+└── tests/                        # 10 Automated Security & Privacy Test Suites (Archived Proof)
+    ├── privacy.test.mjs          # Mathematical checksums (Verhoeff, Luhn, GSTIN)
+    ├── vault-security.test.mjs   # Origin-locking & HITL Secret Guard
+    ├── structural-boundary.test.mjs
+    ├── autonomous-canvas-vision.test.mjs
+    └── system1-onnx.test.mjs     # Laya non-autoregressive decision benchmarks
 ```
 
 ---
 
 ## 📚 Academic References & Research Foundations
 
-1. **Laya Decision Engine:** *Non-Autoregressive Typed Decisions via Reinforcement Learning with Calibrated Scoring Rules (RLCD)* (Convai Innovations, 2025).
-2. **DBNet:** *Real-time Scene Text Detection with Differentiable Binarization* (Liao et al., AAAI 2020).
-3. **BlazeFace:** *Sub-millisecond Neural Face Detection on Mobile GPUs* (Bazarevsky et al., CVPR 2019).
-4. **OmniParser v2.0:** *A Screen Parsing Module for Pure Vision Based GUI Agents* (Microsoft Research, 2024).
-5. **Verhoeff Algorithm:** *Error Detecting Decimal Codes* (J. Verhoeff, Mathematical Centre Tracts 29, 1969).
-6. **ISO/IEC 7064:** *Information technology — Security techniques — Check character systems* (ISO 7064:2003).
+All literature referenced in SpideyAgent's system design is archived in the repository [`docs/papers/`](docs/papers/) directory and linked to their primary publications below:
+
+1. **OmniParser v2.0:** *A Screen Parsing Module for Pure Vision Based GUI Agents* (Microsoft Research, 2024).
+   * 🔗 ArXiv Publication: [arXiv:2411.05644](https://arxiv.org/abs/2411.05644)
+   * 📄 Local Paper Archive: [`docs/papers/OmniParser_v2_arxiv_2411.05644.pdf`](docs/papers/OmniParser_v2_arxiv_2411.05644.pdf)
+
+2. **ScreenAI:** *A Vision-Language Model for UI and Infographics Understanding* (Google Research, 2024).
+   * 🔗 ArXiv Publication: [arXiv:2402.04615](https://arxiv.org/abs/2402.04615)
+   * 📄 Local Paper Archive: [`docs/papers/ScreenAI_arxiv_2402.04615.pdf`](docs/papers/ScreenAI_arxiv_2402.04615.pdf)
+
+3. **SeeClick:** *Harnessing GUI Grounding for Advanced Visual GUI Agents* (Cheng et al., 2024).
+   * 🔗 ArXiv Publication: [arXiv:2401.10935](https://arxiv.org/abs/2401.10935)
+   * 📄 Local Paper Archive: [`docs/papers/SeeClick_arxiv_2401.10935.pdf`](docs/papers/SeeClick_arxiv_2401.10935.pdf)
+
+4. **UI-JEPA:** *Joint-Embedding Predictive Architecture for Visual Web Interaction* (2024).
+   * 🔗 ArXiv Publication: [arXiv:2409.04081](https://arxiv.org/abs/2409.04081)
+   * 📄 Local Paper Archive: [`docs/papers/UI-JEPA_arxiv_2409.04081.pdf`](docs/papers/UI-JEPA_arxiv_2409.04081.pdf)
+
+5. **Available, but Invisible:** *Evaluating and Mitigating Visual Privacy Risks in Web GUI Agents* (2024).
+   * 🔗 ArXiv Publication: [arXiv:2402.10139](https://arxiv.org/abs/2402.10139)
+   * 📄 Local Paper Archive: [`docs/papers/Available_but_Invisible_arxiv_2602.10139.pdf`](docs/papers/Available_but_Invisible_arxiv_2602.10139.pdf)
+
+6. **Laya Decision Model:** *Non-Autoregressive Typed Decisions via Reinforcement Learning with Calibrated Scoring Rules (RLCD)* (Convai Innovations, 2025).
+   * 🔗 Model Weights & Documentation: [convaiinnovations/laya on HuggingFace](https://huggingface.co/convaiinnovations/laya)
+
+7. **DBNet:** *Real-time Scene Text Detection with Differentiable Binarization* (Liao et al., AAAI 2020).
+   * 🔗 ArXiv Publication: [arXiv:1911.08947](https://arxiv.org/abs/1911.08947)
+
+8. **BlazeFace:** *Sub-millisecond Neural Face Detection on Mobile GPUs* (Bazarevsky et al., CVPR 2019).
+   * 🔗 ArXiv Publication: [arXiv:1907.05047](https://arxiv.org/abs/1907.05047)
+
+9. **Verhoeff Algorithm:** *Error Detecting Decimal Codes* (J. Verhoeff, Mathematical Centre Tracts 29, 1969).
+   * 🔗 Monograph Archive: [Centrum Wiskunde & Informatica (CWI) Institutional Repository](https://pure.cwi.nl/ws/portalfiles/portal/14352/14352A.pdf)
+
+10. **ISO/IEC 7064:** *Information technology — Security techniques — Check character systems* (ISO 7064:2003 MOD 37, 36).
+    * 🔗 International Standard Specification: [ISO Standards Catalog ISO/IEC 7064:2003](https://www.iso.org/standard/31531.html)
 
 ---
 
 <p align="center">
-  <b>SpideyAgent</b> · Developed for the Smart India Hackathon 2026 (SIH-26171)<br/>
+  <b>SpideyAgent</b> · Developed for the Smart India Hackathon 2026 (SIH-26171) by <b>Team Silence like Lasagna</b><br/>
   <i>Indian Space Research Organisation (ISRO)</i><br/><br/>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=flat-square" alt="License: Apache 2.0"></a>
 </p>
