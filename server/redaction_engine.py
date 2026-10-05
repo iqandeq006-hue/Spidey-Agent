@@ -346,9 +346,9 @@ def redact_and_capture(portal="hr", custom_url=None):
     with open(redacted_html_path, "w", encoding="utf-8") as f_out:
         f_out.write(modified_html)
 
-    # Root redact folder for user output
-    root_dir = os.path.normpath(os.path.join(testbed_dir, "..", ".."))
-    redact_dir = os.path.join(root_dir, "redact")
+    # Redact folder inside repository for user output & proof
+    repo_root = os.path.normpath(os.path.join(testbed_dir, ".."))
+    redact_dir = os.path.join(repo_root, "redact")
     os.makedirs(redact_dir, exist_ok=True)
 
     if custom_url:
