@@ -234,16 +234,16 @@ Evaluated against the standardized SIH-26171 Ground-Truth Benchmark Suite ([`tes
 
 ---
 
-## ⚔️ Competitive Comparison Matrix
+## 🛡️ Zero-Trust Architectural Advantage
 
-| Architectural Feature | Naive DOM Agents (e.g. Browser-Use, Skyvern) | Other Hackathon Submissions | **SpideyAgent (SIH-26171)** |
+| Architectural Dimension | Traditional Unshielded Web Agents | Naive Scraping Extensions | **SpideyAgent (SIH-26171)** |
 |:---|:---:|:---:|:---:|
 | **Screen Frame Egress** | ❌ Sends unredacted frames to cloud | ❌ Uploads raw screenshots | 🛡️ **Zero Egress (Only sanitized tokens)** |
 | **Canvas & Signature Vision** | ❌ Completely blind to `<canvas>` | ❌ Basic string regex only | 🛡️ **On-Device DBNet + CCL Segmentation** |
 | **Biometric Face Masking** | ❌ None | ⚠️ Cloud API or coordinate guess | 🛡️ **On-Device BlazeFace ONNX** |
 | **Aadhaar / GSTIN Precision** | ❌ Naive regex with massive false positives | ⚠️ Simple length checks | 🛡️ **Exact Verhoeff $D_5$ & ISO 7064 Mod-36** |
 | **DOM Tree Memory Leak Defense** | ❌ Plain text memory storage | ❌ Global regex replacement | 🛡️ **`WeakSet<Node>` Memory Quarantine** |
-| **Prompt Injection Protection** | ❌ Rehydrates tokens on any domain | ⚠️ Basic blacklist | 🛡️ **Origin-Locked Vault + HITL Secret Guard** |
+| **Prompt Injection Protection** | ❌ Rehydrates tokens on any domain | ⚠️ Basic domain blacklist | 🛡️ **Origin-Locked Vault + HITL Secret Guard** |
 | **Model Context Protocol (MCP)** | ❌ Not supported | ❌ Not supported | 🛡️ **Native stdio MCP Server (`mcp_server.py`)** |
 
 <br/>
@@ -362,7 +362,7 @@ SIH_3/
 ├── .agents/                      # Model Context Protocol (MCP) server configuration
 │   └── mcp_config.json
 ├── docs/                         # Presentation & Academic Research
-│   ├── SentryAgent.pptx          # Official Hackathon Pitch Deck & Slides
+│   ├── SpideyAgent.pptx          # Official Hackathon Pitch Deck & Slides
 │   └── papers/                   # Foundational Academic Literature
 ├── extension/                    # Chrome MV3 Privacy-Preserving Agent Client
 │   ├── icons/                    # Project logos, icons, and avatars

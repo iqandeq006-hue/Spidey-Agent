@@ -54,10 +54,10 @@ cd ..
 :: 5. Launch Background Services
 echo.
 echo [3/4] Starting Local Synthetic ISRO Testbed (Port 3000)...
-start "Sentry Testbed (Port 3000)" cmd /c "python -m http.server 3000 --directory testbed"
+start "SpideyAgent Testbed (Port 3000)" cmd /c "python -m http.server 3000 --directory testbed"
 
-echo [4/4] Starting Sentry Central Reasoning Server & Laya (Port 8000)...
-start "Sentry Central Brain (Port 8000)" cmd /c "python server/app.py"
+echo [4/4] Starting SpideyAgent Central Reasoning Server & Laya (Port 8000)...
+start "SpideyAgent Central Brain (Port 8000)" cmd /c "python server/app.py"
 
 :: 6. Launch Browser
 echo.
@@ -73,7 +73,7 @@ echo   2. Toggle "Developer mode" ON (top right)
 echo   3. Click "Load unpacked" and select:
 echo      %CD%\extension\dist
 echo   4. Visit http://localhost:3000
-echo   5. Press Ctrl+Shift+K on the page to open the Sentry Spotlight HUD!
+echo   5. Press Ctrl+Shift+K on the page to open the SpideyAgent Spotlight HUD!
 echo =====================================================================
 echo.
 
