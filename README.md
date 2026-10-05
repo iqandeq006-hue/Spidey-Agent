@@ -27,8 +27,7 @@
   <a href="#-system-architecture"><b>Architecture</b></a> ·
   <a href="#-on-device-neural-model-zoo"><b>Model Zoo</b></a> ·
   <a href="#-empirical-benchmark-scorecard"><b>Benchmarks</b></a> ·
-  <a href="#-zero-trust-threat-model"><b>Security</b></a> ·
-  <a href="#-visual-verification--evidence-gallery"><b>Evidence Gallery</b></a>
+  <a href="#-zero-trust-threat-model"><b>Security</b></a>
 </p>
 
 ---
@@ -80,118 +79,116 @@ SpideyAgent integrates **Laya** ([`convaiinnovations/laya`](https://huggingface.
 | **Review Empirical Precision & Latency Numbers** | [Empirical Benchmark Scorecard](#-empirical-benchmark-scorecard) |
 | **Examine Prompt-Injection & Exploit Defenses** | [Zero-Trust Threat Model](#-zero-trust-threat-model) |
 | **Run the 19 Automated Privacy & Unit Tests** | [Automated Verification Suite](#-automated-verification-suite) |
-| **Inspect Proof of Redacted Portals** | [Visual Verification & Evidence Gallery](#-visual-verification--evidence-gallery) |
 
 ---
 
 ## 🏛️ System Architecture
 
-### High-Level Data Flow
+### 1. High-Level Data Flow Pipeline
 
 ```mermaid
 flowchart TD
-    subgraph BROWSER ["BROWSER - Chrome MV3 Extension"]
-
-        subgraph INJECT ["Injection Layer"]
-            DOM["Raw DOM + HTML5 Canvas"]
-            Spotlight["Spotlight HUD - content.ts"]
-        end
-
-        subgraph PERCEPTION ["Neural Perception - visionEngine.ts"]
-            BF["BlazeFace ONNX - Face Blackout - 536KB / 2.1ms"]
-            DB["DBNet ONNX - Signature Pad Text - 4.75MB / 6.9ms"]
-            OM["OmniParser v2 - UI Icon Grounding - 76.7MB / 28ms"]
-            YO["YOLOS-ViT q4 - Visual Layout - 7.45MB / 18.5ms"]
-        end
-
-        subgraph PRIVACY ["Privacy Firewall - backend/privacy/"]
-            CHK["checksums.ts - Verhoeff D5 / Luhn / ISO 7064 Mod-36"]
-            SB["structuralBoundary.ts - WeakSet DOM Quarantine"]
-            VLT["vault.ts - Origin-Locked Token Store"]
-            SCG["staticContentGeneralizer.ts - PII Token Replacement"]
-            GAZ["gazetteer.ts - Named-Entity Recognition"]
-        end
-
-        SANITIZED["Opaque Semantic Scene Graph - Zero Raw Pixels - SHA-256 Digest"]
-
-        subgraph AUDIT ["On-Device Safety Gate - system1Engine.ts"]
-            S1["laya_system1_int8.onnx - Non-Autoregressive Audit - 18.7KB / 2ms"]
-        end
-
-        subgraph DISPATCH ["Action Dispatch - execution/"]
-            AD["actionDispatcher.ts - Action Router and Serializer"]
-            CDP["cdpDispatcher.ts - Chrome DevTools Protocol"]
-            NAV["deterministicNavigator.ts - Replay and Navigation Plan"]
-            HITL["HITL Physical Gate - vault.ts"]
-        end
-
-        subgraph NETCTL ["Egress Control - backend/network/"]
-            EV["egressVerifier.ts - Zero-Egress Enforcement"]
-            OL["observabilityLogger.ts - Local-Only Audit Trail"]
-            SHL["selfHealingAuditor.ts - Assertion Monitor"]
-        end
-
-        BG["background.ts - Service Worker Event Bus"]
+    subgraph STAGE1 ["STAGE 1: In-Browser Perception and Capture"]
+        DOM["Raw Viewport and DOM (content.ts)"]
+        SENTRY["Parallel ONNX Sentry Pipeline (visionEngine.ts)"]
+        BF["BlazeFace ONNX: Face Blackout (2.1ms)"]
+        DB["DBNet ONNX: Signature Pad Text (6.9ms)"]
+        OP["OmniParser v2: UI Icon Grounding (28ms)"]
+        YO["YOLOS-ViT q4: Visual Layout (18.5ms)"]
+        DOM --> SENTRY
+        SENTRY --> BF
+        SENTRY --> DB
+        SENTRY --> OP
+        SENTRY --> YO
     end
 
-    subgraph SERVER ["REASONING SERVER - server/app.py - Port 8000"]
-
-        subgraph LAYA_ROUTER ["Laya Router - Fast Path - 30ms"]
-            LR["Router.predict - Script Detection and Language Routing"]
-            LA["laya Agent - ModernBERT-large 421M - English"]
-            LM["laya-multilingual - mmBERT-base 322M - 100plus Languages"]
-        end
-
-        subgraph PLANNER ["Multihop Planner - Slow Path - Optional"]
-            LLM["LLM Backend - Groq / Ollama / OpenAI / Rule-Based"]
-        end
-
-        RE["redaction_engine.py - Headless Playwright - redact/before and after"]
+    subgraph STAGE2 ["STAGE 2: Zero-Trust Privacy Airlock"]
+        CHECKSUM["Deterministic Mathematical Checksums (checksums.ts)"]
+        QUARANTINE["WeakSet Node Memory Quarantine (structuralBoundary.ts)"]
+        VAULT["Origin-Locked Token Vault and SHA-256 Signer (vault.ts)"]
+        CHECKSUM --> QUARANTINE
+        QUARANTINE --> VAULT
     end
 
-    subgraph MCP ["MCP SERVER - server/mcp_server.py - stdio"]
-        MCP1["browser_get_sanitized_state - Live DOM with PII Tokens"]
-        MCP2["protect url - One-Command Privacy Auditor"]
+    subgraph STAGE3 ["STAGE 3: Laya Non-Autoregressive Decision Brain"]
+        ROUTER["Laya Router: Script and Language Classifier (server/app.py)"]
+        FORWARD["Single Forward Pass: choice, score, noul (convaiinnovations/laya)"]
+        ROUTER --> FORWARD
     end
 
-    BG --> Spotlight
-    Spotlight --> DOM
-    DOM --> BF
-    DOM --> DB
-    DOM --> OM
-    DOM --> YO
-    BF --> CHK
-    DB --> CHK
-    OM --> SB
-    YO --> SB
-    CHK --> SCG
-    SB --> SCG
-    VLT --> SCG
-    GAZ --> SCG
-    SCG --> SANITIZED
+    subgraph STAGE4 ["STAGE 4: On-Device Safety Audit and Hardware Dispatch"]
+        AUDIT["Laya System-1 ONNX: Risk Classifier in under 2ms (system1Engine.ts)"]
+        GATE{"Risk Tier Assessment"}
+        AUTO["TIER 1 and 2: Safe Action -> Chrome DevTools Protocol Dispatch"]
+        HITL["TIER 4: Financial or Statutory -> Physical HITL Approval Dialog"]
+        AUDIT --> GATE
+        GATE -->|"Safe Action"| AUTO
+        GATE -->|"Sensitive Mutation"| HITL
+    end
 
-    SANITIZED -- "Tokens plus SHA-256 Digest" --> LR
-    SANITIZED -. "stdio JSON-RPC" .-> MCP1
-    SANITIZED --> EV
+    STAGE1 ==>|"Scrubbed Visual Pixels and Quarantined Nodes"| STAGE2
+    STAGE2 ==>|"Opaque Semantic Scene Graph: Zero Raw Bytes"| STAGE3
+    STAGE3 ==>|"Planned Action Intent and Target Element ID"| STAGE4
+```
 
-    LR --> LA
-    LR --> LM
-    LA --> S1
-    LM --> S1
-    LR -.-> LLM
-    LLM --> S1
+### 2. End-to-End Pipeline Execution Map
 
-    S1 -- "TIER 1 and 2 - Safe Action" --> AD
-    S1 -- "TIER 4 - Statutory or Financial" --> HITL
-    HITL -- "Human Physical Approval" --> AD
-    AD --> CDP
-    AD --> NAV
-    CDP --> DOM
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                 SPIDEYAGENT END-TO-END PIPELINE FLOW                                   │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
-    EV --> OL
-    EV --> SHL
-
-    RE --> MCP2
+ [1. BROWSER INJECTION & DOM MONITOR]
+    User Navigation / Goal Dispatched
+          │
+          ▼
+    extension/src/content/content.ts  (Spotlight HUD Interception)
+          │
+ ─────────┼───────────────────────────────────────────────────────────────────────────────────────────────
+ [2. ON-DEVICE NEURAL PERCEPTION & PRIVACY AIRLOCK] (0 Raw Bytes Egress)
+          │
+          ├──► visionEngine.ts (WebGPU / WASM SIMD Hardware-Accelerated Vision)
+          │      ├── BlazeFace ONNX (536 KB / 2.1 ms)   ──► Blackout employee badges & passport scans
+          │      ├── DBNet Text ONNX (4.75 MB / 6.9 ms) ──► Burn out text on canvas signature pads
+          │      ├── OmniParser v2 (76.7 MB / 28.0 ms)  ──► Ground UI icon / button coordinates
+          │      └── YOLOS-ViT q4 (7.45 MB / 18.5 ms)   ──► Vision Transformer layout hierarchy
+          │
+          ├──► checksums.ts (Cryptographic & Deterministic Validators)
+          │      ├── Verhoeff D5 Algorithm  ──► Mathematical validation of 12-digit Indian Aadhaar
+          │      ├── Luhn Algorithm         ──► Validation of 16-digit payment cards
+          │      └── ISO 7064 Mod-36        ──► Validation of 15-char Indian GSTIN tax identifiers
+          │
+          └──► structuralBoundary.ts & vault.ts (Quarantine & Tokenization)
+                 ├── WeakSet<Node> Quarantine ──► Prevents V8 DOM serializer from touching sensitive nodes
+                 ├── Origin-Locked Vault      ──► Replaces PII with <AADHAAR>, <GSTIN>, <PERSON> tokens
+                 └── SHA-256 State Signer     ──► Signs sanitized scene graph to prevent tampering
+          │
+ ─────────┼───────────────────────────────────────────────────────────────────────────────────────────────
+ [3. LAYA NON-AUTOREGRESSIVE REASONING SERVER] (Port 8000 / MCP JSON-RPC)
+          │
+          ▼
+    server/app.py (Laya Fast-Path Decision Router)
+          │
+          ├──► Script & Language Detector (<0.5 ms) ──► Routes to laya or laya-multilingual
+          │
+          └──► Single Forward Pass (~33 ms, Non-Autoregressive, Zero LLM Hallucination)
+                 ├── choice  ──► Select target interactive element from sanitized scene graph
+                 ├── score   ──► Predict execution urgency score & action complexity
+                 └── noul    ──► Calibrated probability: P(Action mutates state or impacts privacy)
+          │
+ ─────────┼───────────────────────────────────────────────────────────────────────────────────────────────
+ [4. ON-DEVICE SAFETY AUDIT & HARDWARE-LEVEL DISPATCH] (<2 ms On-Device)
+          │
+          ▼
+    extension/src/backend/execution/system1Engine.ts (laya_system1_int8.onnx)
+          │
+          ├── Evaluates action safety against local security policy in < 2.0 ms
+          │
+          ├───► TIER 1 / TIER 2 (Safe Navigation, Read, Form Fill)
+          │       └── cdpDispatcher.ts ──► Trusted Chrome DevTools Protocol hardware click/type
+          │
+          └───► TIER 4 (Statutory Submission, Financial Checkout, Auth)
+                  └── vault.ts (HITL Gate) ──► Physical Human Approval Dialog Required
 ```
 
 ---
@@ -479,46 +476,6 @@ npm run test
 ...
 ℹ tests 19 | pass 19 | fail 0 | duration_ms ~180ms
 ```
-
----
-
-## 📸 Visual Verification & Evidence Gallery
-
-SpideyAgent operates as a **zero-trust, on-device privacy airlock**. The following live benchmarks illustrate raw DOM/visual viewports intercepted and scrubbed into zero-egress semantic tokens before serialization:
-
-### 1. Smart India Hackathon (SIH) Portal (`sih.gov.in`)
-*Scrubbing of login credentials, SPOC registration inputs, institutional contact numbers, and problem-statement search parameters.*
-
-| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
-| :---: | :---: |
-| <img src="redact/before/sihportal.png" alt="SIH Portal Before Redaction" width="460" /> | <img src="redact/after/sihportal.jpeg" alt="SIH Portal After Redaction" width="460" /> |
-
----
-
-### 2. Complex Multi-Type Forms (DemoQA Practice Form)
-*Names (`<PERSON>`), email addresses, mobile numbers, dates of birth, and address controls quarantined in WeakSet memory.*
-
-| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
-| :---: | :---: |
-| <img src="redact/before/form.png" alt="Form Before Redaction" width="460" /> | <img src="redact/after/form.jpeg" alt="Form After Redaction" width="460" /> |
-
----
-
-### 3. Structured Relational Data Tables (W3Schools HTML Tables)
-*Automated column detection and cell blackboxing across tabular business directories without distorting DOM geometry.*
-
-| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
-| :---: | :---: |
-| <img src="redact/before/tables.png" alt="Tables Before Redaction" width="460" /> | <img src="redact/after/tables.jpeg" alt="Tables After Redaction" width="460" /> |
-
----
-
-### 4. Large-Scale Space Agency Tabular Registry (Wikipedia List of Space Agencies)
-*Dense tabular dataset parsing with automatic cell-level blackboxing across space agencies, country names, acronyms, and capabilities.*
-
-| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
-| :---: | :---: |
-| <img src="redact/before/wikipedia.png" alt="Wikipedia Space Agencies Before Redaction" width="460" /> | <img src="redact/after/wikipedia.jpeg" alt="Wikipedia Space Agencies After Redaction" width="460" /> |
 
 ---
 
