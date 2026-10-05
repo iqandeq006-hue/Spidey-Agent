@@ -453,35 +453,6 @@ Evaluated against the standardized SIH-26171 Ground-Truth Benchmark Suite:
 
 ---
 
-## 📸 Visual Verification & Evidence Gallery
-
-*All proof images provided by the evaluation team will be displayed in this gallery.*
-
-<table width="100%">
-<tr>
-<td width="50%" align="center" valign="top">
-<h4>🛰️ 1. ISTRAC Satellite Telemetry</h4>
-<p><sub>Classified transponder keys, telemetry streams, and orbital vectors sanitized into cryptographic tokens.</sub></p>
-</td>
-<td width="50%" align="center" valign="top">
-<h4>💼 2. GeM / eProcurement Portal</h4>
-<p><sub>Contractor PAN, ISO 7064 Mod-36 GSTIN, and HTML5 canvas digital signature pads bounded via DBNet.</sub></p>
-</td>
-</tr>
-<tr>
-<td width="50%" align="center" valign="top">
-<h4>👥 3. HR Employee Deputation</h4>
-<p><sub>Employee service records, phone numbers, Aadhaar, and photo badge avatars blacked out via BlazeFace.</sub></p>
-</td>
-<td width="50%" align="center" valign="top">
-<h4>🌐 4. Live Domain Verification</h4>
-<p><sub>Universal redaction engine verified across live public portals with zero-egress state generation.</sub></p>
-</td>
-</tr>
-</table>
-
----
-
 ## 🔌 Model Context Protocol (MCP) Integration
 
 SpideyAgent includes a production-grade **Model Context Protocol (MCP)** server ([`server/mcp_server.py`](server/mcp_server.py)), allowing IDEs and autonomous AI tools (such as Antigravity IDE, Claude Desktop, and Cursor) to interact with the browser safely:
