@@ -1,9 +1,0 @@
-# SpideyAgent On-Device Vision Model Dependencies
-# Install via: pip install -r scripts/requirements-models.txt
-
-ultralytics>=8.3.0
-onnx>=1.16.0
-onnxruntime>=1.18.0
-torch>=2.0.0
-requests>=2.31.0
-huggingface-hub>=0.23.0
