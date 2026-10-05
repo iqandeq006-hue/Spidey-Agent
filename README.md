@@ -22,6 +22,7 @@
 
 <p align="center">
   <a href="#-quick-start"><b>Quick Start</b></a> ·
+  <a href="#-live-visual-proof-on-device-redaction-benchmarks"><b>Visual Proofs</b></a> ·
   <a href="#-the-laya-decision-model"><b>Laya Decision Model</b></a> ·
   <a href="#-how-it-fits-together"><b>How It Fits Together</b></a> ·
   <a href="#-system-architecture"><b>Architecture</b></a> ·
@@ -41,6 +42,46 @@ As autonomous browser agents navigate defense and government intranets, uploadin
 - 🛡️ **Zero Raw Data Egress:** Faces, signature pads, credentials, and telemetry streams are intercepted and burned out in-memory on the client machine before any frame or DOM payload is serialized.
 - 🔬 **On-Device Multi-Modal Perception:** Runs 5 quantized ONNX models directly on the client's WebGPU / WASM SIMD runtime — zero external vision APIs or cloud inference.
 - 🔒 **Cryptographic State Locking:** Outbound states are signed with SHA-256 integrity digests, and sensitive tokens are permanently bound to `window.location.origin` with Human-in-the-Loop (HITL) physical gating.
+
+---
+
+## 📸 Live Visual Proof: On-Device Redaction Benchmarks
+
+SpideyAgent operates as a **hardware-gated, zero-trust privacy airlock**. The following live benchmarks illustrate raw DOM viewports and visual elements intercepted and scrubbed into zero-egress semantic tokens in-memory on the client machine before state serialization:
+
+### 1. Smart India Hackathon (SIH) Portal (`sih.gov.in`)
+*Scrubbing of login credentials, SPOC registration inputs, institutional contact numbers, and problem-statement search parameters.*
+
+| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
+| :---: | :---: |
+| <img src="redact/before/sihportal.png" alt="SIH Portal Before Redaction" width="460" /> | <img src="redact/after/sihportal.jpeg" alt="SIH Portal After Redaction" width="460" /> |
+
+---
+
+### 2. Complex Multi-Type Forms (DemoQA Practice Form)
+*Names (`<PERSON>`), email addresses, mobile numbers, dates of birth, and address controls quarantined in WeakSet memory.*
+
+| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
+| :---: | :---: |
+| <img src="redact/before/form.png" alt="Form Before Redaction" width="460" /> | <img src="redact/after/form.jpeg" alt="Form After Redaction" width="460" /> |
+
+---
+
+### 3. Structured Relational Data Tables (W3Schools HTML Tables)
+*Automated column detection and cell blackboxing across tabular business directories without distorting DOM geometry.*
+
+| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
+| :---: | :---: |
+| <img src="redact/before/tables.png" alt="Tables Before Redaction" width="460" /> | <img src="redact/after/tables.jpeg" alt="Tables After Redaction" width="460" /> |
+
+---
+
+### 4. Large-Scale Space Agency Tabular Registry (Wikipedia List of Space Agencies)
+*Dense tabular dataset parsing with automatic cell-level blackboxing across space agencies, country names, acronyms, and capabilities.*
+
+| Raw Portal View (Before Redaction) | SpideyAgent Zero-Egress Protected (After Redaction) |
+| :---: | :---: |
+| <img src="redact/before/wikipedia.png" alt="Wikipedia Space Agencies Before Redaction" width="460" /> | <img src="redact/after/wikipedia.jpeg" alt="Wikipedia Space Agencies After Redaction" width="460" /> |
 
 ---
 
@@ -72,6 +113,7 @@ SpideyAgent integrates **Laya** ([`convaiinnovations/laya`](https://huggingface.
 | What do you want to inspect? | Start here |
 |:---|:---|
 | **Launch 1-Click Live Judge Demo** | [Quick Start](#-quick-start) (`run_demo.bat`) |
+| **Inspect Live Visual Proofs** | [Visual Proof Gallery](#-live-visual-proof-on-device-redaction-benchmarks) |
 | **Inspect Laya Non-Autoregressive Decision Engine** | [The Laya Decision Model](#-the-laya-decision-model) |
 | **Understand the 4 Architectural Planes** | [How It Fits Together](#-how-it-fits-together) |
 | **Review Technical Architecture & Dataflow** | [System Architecture](#-system-architecture) |
