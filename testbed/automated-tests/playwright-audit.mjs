@@ -6,7 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extPath = path.resolve(__dirname, '../../extension/dist');
 
 console.log('='.repeat(70));
-console.log('🔍 SENTRYAGENT PLAYWRIGHT DEEP AUDIT & BUG DETECTION SUITE');
+console.log('🔍 SPIDEYAGENT PLAYWRIGHT DEEP AUDIT & BUG DETECTION SUITE');
 console.log('='.repeat(70));
 
 const results = {

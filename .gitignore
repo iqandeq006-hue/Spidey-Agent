@@ -131,6 +131,7 @@ testbed/reports/
 test-results/
 playwright-report/
 blob-report/
+testbed/redacted_*
 *.log
 
 # ------------------------------------------

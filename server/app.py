@@ -1,5 +1,5 @@
 """
-SentryAgent Central Reasoning Server (v2.5)
+SpideyAgent Central Reasoning Server (v2.5)
 Implements true LLM reasoning over zero-PII Opaque Scene Graphs.
 Compatible with:
   - Local Ollama (e.g. Qwen2.5, Llama-3.2, Mistral) via http://localhost:11434
@@ -21,7 +21,7 @@ LLM_API_KEY = os.environ.get('LLM_API_KEY', '')
 LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'http://localhost:11434/v1')
 LLM_MODEL = os.environ.get('LLM_MODEL', 'qwen2.5:latest')
 
-SYSTEM_PROMPT = """You are SentryAgent's Central Reasoning Brain. You operate as an autonomous browser agent.
+SYSTEM_PROMPT = """You are SpideyAgent's Central Reasoning Brain. You operate as an autonomous browser agent.
 CRITICAL SECURITY INVARIANTS:
 1. You operate STRICTLY over sanitized, zero-PII UI scene graphs. The screen contains opaque node IDs (e.g. node_btn_submit, node_field_quote) and semantic tokens (e.g. <PERSON_1>, <AADHAAR_ID_1>, <CONFIDENTIAL_VAL_1>).
 2. NEVER attempt to guess, extract, or hallucinate raw PII. Use existing tokens verbatim.
@@ -244,7 +244,7 @@ def heuristic_goal_planner(user_goal, nodes, history, checklist):
         "isFinished": len(history) >= 2
     }
 
-class SentryAgentRequestHandler(BaseHTTPRequestHandler):
+class SpideyAgentRequestHandler(BaseHTTPRequestHandler):
     def _send_cors_headers(self):
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -263,7 +263,7 @@ class SentryAgentRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             resp = {
                 "status": "HEALTHY",
-                "service": "SentryAgent Autonomous Reasoning Engine",
+                "service": "SpideyAgent Autonomous Reasoning Engine",
                 "version": "2.5.0",
                 "llmProvider": LLM_PROVIDER,
                 "configuredModel": LLM_MODEL,
@@ -324,9 +324,9 @@ class SentryAgentRequestHandler(BaseHTTPRequestHandler):
 
 def run_server(port=PORT):
     server_address = ('', port)
-    httpd = HTTPServer(server_address, SentryAgentRequestHandler)
+    httpd = HTTPServer(server_address, SpideyAgentRequestHandler)
     print(f"==================================================")
-    print(f" SentryAgent Autonomous Reasoning Engine (v2.5)")
+    print(f" SpideyAgent Autonomous Reasoning Engine (v2.5)")
     print(f" Listening on http://localhost:{port}")
     print(f" LLM Provider:    {LLM_PROVIDER} ({LLM_MODEL})")
     print(f" Wire Contract:   Zero-Egress SHA-256 Opaque SceneGraph")

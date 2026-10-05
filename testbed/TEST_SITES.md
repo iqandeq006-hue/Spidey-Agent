@@ -1,6 +1,6 @@
-# SentryAgent Live Testing Sites & Benchmarks
+# SpideyAgent Live Testing Sites & Benchmarks
 
-The following live public websites and local proving grounds are curated for testing SentryAgent across all capabilities (Forms, HTML Tables, Signatures/Canvases, and Government Portals):
+The following live public websites and local proving grounds are curated for testing SpideyAgent across all capabilities (Forms, HTML Tables, Signatures/Canvases, and Government Portals):
 
 ---
 
@@ -37,7 +37,7 @@ The following live public websites and local proving grounds are curated for tes
 ## 3. On-Device Vision & Digital Signature Canvas
 * **[Signature Pad Testbed](https://szimek.github.io/signature_pad/)**
   * **URL:** `https://szimek.github.io/signature_pad/`
-  * **Test Focus:** Draw any signature or handwritten text on the HTML5 canvas; SentryAgent runs DBNet neural vision / CCL to burn opaque blackboxes over the signature strokes locally.
+  * **Test Focus:** Draw any signature or handwritten text on the HTML5 canvas; SpideyAgent runs DBNet neural vision / CCL to burn opaque blackboxes over the signature strokes locally.
 
 ---
 

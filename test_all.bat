@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo =====================================================================
-echo  SENTRYAGENT -- AUTOMATED VERIFICATION SUITE
+echo  SPIDEYAGENT -- AUTOMATED VERIFICATION SUITE
 echo  Runs all 18 Unit, Pipeline, Privacy, and End-to-End Tests
 echo =====================================================================
 echo.

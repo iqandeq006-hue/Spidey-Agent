@@ -136,7 +136,7 @@ All 18 repos were cloned via `clone_repos.ps1` into the local `repo/` directory:
 
 ---
 
-## 8. Our Decided Winning Architecture: "SentryAgent"
+## 8. Our Decided Winning Architecture: "SpideyAgent"
 
 A **Dual-Track Perception & Local Safety Boundary** architecture designed to maximize all five rubric categories.
 

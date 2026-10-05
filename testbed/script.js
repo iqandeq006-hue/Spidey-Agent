@@ -449,5 +449,5 @@ function handleFormSubmission(formName) {
   });
 
   console.log(`[TESTBED SUBMIT] ${formName} submitted values:`, values);
-  alert(`[SUBMISSION DISPATCHED]\n\nForm: ${formName}\nFields submitted: ${Object.keys(values).length}\n\nNotice: Check the developer console to view the exact submitted values. If SentryAgent's local re-hydration is working, the values here are real, even though an outside observer only saw sanitized tokens!`);
+  alert(`[SUBMISSION DISPATCHED]\n\nForm: ${formName}\nFields submitted: ${Object.keys(values).length}\n\nNotice: Check the developer console to view the exact submitted values. If SpideyAgent's local re-hydration is working, the values here are real, even though an outside observer only saw sanitized tokens!`);
 }

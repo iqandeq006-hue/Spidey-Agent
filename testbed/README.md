@@ -1,6 +1,6 @@
-# SentryAgent Testbed & Verification Suite
+# SpideyAgent Testbed & Verification Suite
 
-This directory contains the testing framework, interactive simulation portals, and automated test suites for evaluating the SentryAgent browser extension against the ISRO SIH26171 criteria.
+This directory contains the testing framework, interactive simulation portals, and automated test suites for evaluating the SpideyAgent browser extension against the ISRO SIH26171 criteria.
 
 ---
 

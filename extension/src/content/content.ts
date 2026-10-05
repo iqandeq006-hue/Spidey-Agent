@@ -1,18 +1,19 @@
-import { classifySensitiveText } from '../privacy/checksums';
-import { vaultInstance } from '../privacy/vault';
-import { visionEngineInstance } from '../vision/visionEngine';
-import { egressVerifierInstance, OpaqueSceneNode } from '../network/egressVerifier';
-import { actionDispatcherInstance, PlannedAction } from '../execution/actionDispatcher';
-import { cursorReticleInstance } from '../execution/cursorReticle';
-import { PIIType, SanitizationReport } from '../types';
-import { spatialClassifierInstance } from '../vision/spatialClassifier';
-import { staticContentGeneralizerInstance } from '../privacy/staticContentGeneralizer';
-import { selfHealingAuditorInstance } from '../network/selfHealingAuditor';
-import { uiElementLocatorInstance } from '../vision/uiElementLocator';
-import { sentryPipelineInstance } from '../vision/sentryPipeline';
-import { deterministicNavigatorInstance } from '../execution/deterministicNavigator';
-import { sentrySpotlightInstance } from '../execution/sentrySpotlight';
-import { localSystem1EngineInstance } from '../execution/system1DecisionEngine';
+import { classifySensitiveText } from '../backend/privacy/checksums';
+import { vaultInstance } from '../backend/privacy/vault';
+import { visionEngineInstance } from '../backend/vision/visionEngine';
+import { egressVerifierInstance, OpaqueSceneNode } from '../backend/network/egressVerifier';
+import { actionDispatcherInstance, PlannedAction } from '../backend/execution/actionDispatcher';
+import { cursorReticleInstance } from '../frontend/hud/cursorReticle';
+import { PIIType, SanitizationReport } from '../backend/types';
+import { spatialClassifierInstance } from '../backend/vision/spatialClassifier';
+import { staticContentGeneralizerInstance } from '../backend/privacy/staticContentGeneralizer';
+import { selfHealingAuditorInstance } from '../backend/network/selfHealingAuditor';
+import { uiElementLocatorInstance } from '../backend/vision/uiElementLocator';
+import { sentryPipelineInstance } from '../backend/vision/sentryPipeline';
+import { deterministicNavigatorInstance } from '../backend/execution/deterministicNavigator';
+import { sentrySpotlightInstance } from '../frontend/hud/sentrySpotlight';
+import { localSystem1EngineInstance } from '../backend/execution/system1DecisionEngine';
+import { structuralBoundaryInstance } from '../backend/privacy/structuralBoundary';
 
 interface TrackedElement {
   element: HTMLInputElement | HTMLTextAreaElement | HTMLElement;
@@ -88,9 +89,12 @@ export async function scanAndSanitizePage(
   const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas');
   const spatialResult = await spatialClassifierInstance.classifyScreen(Array.from(canvases));
 
+  // 0.5. Structural Boundary Quarantine: Lock all password/credential form controls in memory
+  structuralBoundaryInstance.evaluateAndQuarantineFormControls(document);
+
   // A.1. Scan Form Inputs & Textareas (Track 1)
   const inputElements = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-    'input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input:not([type]), textarea'
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea'
   );
 
   inputElements.forEach((input, idx) => {
@@ -155,9 +159,26 @@ export async function scanAndSanitizePage(
         type: match.type
       });
 
-      // The "One Operation, Three Channels" mechanism:
+      // Memory-level structural quarantine (fail-closed against exfiltration)
+      structuralBoundaryInstance.quarantineNode(input, {
+        reason: 'PII_INPUT',
+        piiType: match.type,
+        token
+      });
+
       // Mutating DOM at data-source level updates DOM, Accessibility Tree, and Screenshots simultaneously
-      input.value = token;
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      if (input.tagName.toLowerCase() === 'textarea' && nativeTextAreaValueSetter) {
+        nativeTextAreaValueSetter.call(input, token);
+      } else if (nativeInputValueSetter) {
+        nativeInputValueSetter.call(input, token);
+      } else {
+        input.value = token;
+      }
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      
       input.classList.add('sentry-redacted-field');
 
       newRedactedCount++;
@@ -346,28 +367,36 @@ export async function scanAndSanitizePage(
     }
   }
 
-  // A.3. Scan Sensitive Visual Images (Generic across ANY website: avatars, profile photos, signatures)
-  const sensitiveImages = document.querySelectorAll<HTMLImageElement>(
-    'img[class*="avatar"], img[class*="profile"], img[class*="user-photo"], img[class*="user-img"], img[alt*="avatar" i], img[alt*="profile" i], img[alt*="user" i], img[id*="avatar"], img[id*="profile"], img[class*="signature"], img[alt*="signature" i]'
+  // A.3. Universal Semantic Identity Elements (W3C Microdata, Schema.org, Microformats: Name & Handle)
+  const identityElements = document.querySelectorAll<HTMLElement>(
+    '[itemprop="name"], [itemprop="author"], .p-name, .p-nickname, .vcard .fn, [class*="fullname" i], [class*="profile-name" i], [data-testid*="user" i]'
   );
-  sensitiveImages.forEach((img, idx) => {
-    if (img.classList.contains('sentry-redacted-field') || img.getAttribute('data-sentry-redacted') === 'true') return;
-    if (img.closest('#sentry-agent-root') || img.closest('#sentry-risk-modal')) return;
+  identityElements.forEach((el, idx) => {
+    if (el.classList.contains('sentry-redacted-field') || el.getAttribute('data-sentry-redacted') === 'true') return;
+    if (el.closest('#spidey-agent-root') || el.closest('#sentry-risk-modal')) return;
 
-    const altOrClass = `${img.className} ${img.alt} ${img.id}`.toLowerCase();
-    const isSig = altOrClass.includes('sign');
-    const piiType: PIIType = isSig ? 'CANVAS_SIGNATURE' : 'AVATAR_FACE';
+    const rawText = (el.textContent || '').trim();
+    if (!rawText || rawText.length < 2 || vaultInstance.isToken(rawText)) return;
 
-    const selector = img.id ? `#${img.id}` : `img[data-sentry-img-idx="${idx}"]`;
-    img.setAttribute('data-sentry-img-idx', String(idx));
-    const token = vaultInstance.tokenize(`[IMAGE_${img.src.substring(0, 40)}]`, piiType, selector);
+    // Discard generic non-personal navigation text
+    const lower = rawText.toLowerCase();
+    if (['search', 'overview', 'repositories', 'projects', 'packages', 'stars', 'home', 'dashboard'].includes(lower)) return;
 
-    img.classList.add('sentry-redacted-field', 'sentry-redacted-image');
-    img.setAttribute('data-sentry-redacted', 'true');
+    const isHandle = el.classList.contains('p-nickname') || lower.startsWith('@') || /^[a-z0-9_-]+$/i.test(rawText);
+    const piiType: PIIType = isHandle ? 'USERNAME' : 'PERSON';
+
+    const selector = el.id ? `#${el.id}` : `identity-node-${idx}`;
+    const token = vaultInstance.tokenize(rawText, piiType, selector);
+    const origText = el.textContent || '';
+
+    el.textContent = token;
+    el.classList.add('sentry-redacted-field');
+    el.setAttribute('data-sentry-redacted', 'true');
 
     trackedElements.set(selector, {
-      element: img,
-      originalValue: img.src,
+      element: el,
+      originalValue: rawText,
+      originalText: origText,
       token,
       type: piiType
     });
@@ -376,6 +405,61 @@ export async function scanAndSanitizePage(
     entitiesByType[piiType] = (entitiesByType[piiType] || 0) + 1;
     tokens.push(token);
   });
+
+  // A.4. Dual-Gated Visual Image & Face Redaction (Check tags first; if no tags, STILL run on-device vision)
+  const allImages = Array.from(document.querySelectorAll<HTMLImageElement>('img'));
+  for (let idx = 0; idx < allImages.length; idx++) {
+    const img = allImages[idx];
+    if (img.classList.contains('sentry-redacted-field') || img.getAttribute('data-sentry-redacted') === 'true') continue;
+    if (img.closest('#spidey-agent-root') || img.closest('#sentry-risk-modal')) continue;
+
+    const altOrClassOrId = `${img.className} ${img.alt} ${img.id} ${img.src} ${img.getAttribute('itemprop') || ''}`.toLowerCase();
+
+    // EXCLUDE Institutional Brand Logos, University Crests, and Header Branding
+    const isLogoOrEmblem = /logo|brand|emblem|crest|insignia|seal|header-logo|univ-logo/i.test(altOrClassOrId) ||
+                           img.closest('header, nav, .navbar, .brand, .site-header') !== null;
+    if (isLogoOrEmblem) continue;
+
+    const isTagIndicated = /avatar|profile|user|photo|student|candidate|faculty|bio|author|member|passport|id[-_]?card|signature|sign/i.test(altOrClassOrId);
+    const isInProfileCard = img.closest('.profile, .student, [class*="profile" i], [class*="student" i], [id*="profile" i], [id*="student" i]') !== null;
+    
+    // Check 1: Explicit tag/class indication or inside profile card
+    // Check 2: Unlabeled generic image (e.g. on KTU or student portals) -> run on-device neural face check
+    let shouldRedact = isTagIndicated || isInProfileCard;
+    if (!shouldRedact) {
+      try {
+        const isFaceDetected = await visionEngineInstance.scanImageForFace(img);
+        if (isFaceDetected) {
+          shouldRedact = true;
+        }
+      } catch (faceErr) {
+        // Tainted canvas or cross-origin CORS image: skip gracefully
+      }
+    }
+
+    if (shouldRedact) {
+      const isSig = altOrClassOrId.includes('sign');
+      const piiType: PIIType = isSig ? 'CANVAS_SIGNATURE' : 'AVATAR_FACE';
+
+      const selector = img.id ? `#${img.id}` : `img[data-sentry-img-idx="${idx}"]`;
+      img.setAttribute('data-sentry-img-idx', String(idx));
+      const token = vaultInstance.tokenize(`[IMAGE_${img.src.substring(0, 40)}]`, piiType, selector);
+
+      img.classList.add('sentry-redacted-field', 'sentry-redacted-image');
+      img.setAttribute('data-sentry-redacted', 'true');
+
+      trackedElements.set(selector, {
+        element: img,
+        originalValue: img.src,
+        token,
+        type: piiType
+      });
+
+      newRedactedCount++;
+      entitiesByType[piiType] = (entitiesByType[piiType] || 0) + 1;
+      tokens.push(token);
+    }
+  }
 
   // B. Run On-Device Vision Engine (Track 2: Gated by Minimum-Disclosure Ladder)
   let visualRegions: any[] = [];
@@ -394,7 +478,7 @@ export async function scanAndSanitizePage(
   });
 
   if (unredactedCanvases.length > 0 && activeLevel !== 'L1') {
-    console.log(`[SentryAgent] Minimum-Disclosure Ladder dynamically escalated to ${activeLevel} (${unredactedCanvases.length} unredacted canvas(es) detected). Running BlazeFace & DBNet neural vision...`);
+    console.log(`[SpideyAgent] Minimum-Disclosure Ladder dynamically escalated to ${activeLevel} (${unredactedCanvases.length} unredacted canvas(es) detected). Running BlazeFace & DBNet neural vision...`);
     
     // Backup pristine image data BEFORE burning any pixel redactions
     for (const canvas of unredactedCanvases) {
@@ -405,7 +489,7 @@ export async function scanAndSanitizePage(
           trackedCanvases.set(canvas, { canvas, originalImageData, regions: [] });
         }
       } catch (backupErr) {
-        console.warn('[SentryAgent] Canvas snapshot failed (tainted canvas):', backupErr);
+        console.warn('[SpideyAgent] Canvas snapshot failed (tainted canvas):', backupErr);
       }
     }
 
@@ -446,7 +530,7 @@ export async function scanAndSanitizePage(
       visualCountEl.innerHTML = `0 <span style="font-size: 11px; color: #10b981; font-weight: normal;">(PROTECTED)</span>`;
     }
   } else if (canvases.length > 0 && activeLevel === 'L1') {
-    console.log(`[SentryAgent] Minimum-Disclosure Notice: ${canvases.length} canvas(es) present but disclosure level constrained to ${activeLevel}. Vision pipeline skipped.`);
+    console.log(`[SpideyAgent] Minimum-Disclosure Notice: ${canvases.length} canvas(es) present but disclosure level constrained to ${activeLevel}. Vision pipeline skipped.`);
   }
 
   isCurrentlySanitized = true;
@@ -468,7 +552,7 @@ export async function scanAndSanitizePage(
     activeDisclosureLevel: activeLevel
   };
 
-  console.log('[SentryAgent] Dual-Track Sanitization completed in', report.durationMs, 'ms. Total protected entities:', totalCount);
+  console.log('[SpideyAgent] Dual-Track Sanitization completed in', report.durationMs, 'ms. Total protected entities:', totalCount);
   return report;
 }
 
@@ -588,7 +672,7 @@ export async function runAutonomousStep(): Promise<{ success: boolean; message: 
   const localDecision = localSystem1EngineInstance.evaluate(outboundPayload.userGoal || 'Submit procurement form', sceneNodes);
 
   if (localDecision && localDecision.confidence >= 0.80) {
-    console.log(`[SentryAgent] Local System-1 fast-path evaluated in ${localDecision.latencyMs}ms (Confidence: ${(localDecision.confidence * 100).toFixed(0)}%):`, localDecision.action);
+    console.log(`[SpideyAgent] Local System-1 fast-path evaluated in ${localDecision.latencyMs}ms (Confidence: ${(localDecision.confidence * 100).toFixed(0)}%):`, localDecision.action);
     plannedActions = [localDecision.action];
   } else {
     // Optional Fallback to External Server / LLM only if local System 1 is uncertain
@@ -605,10 +689,10 @@ export async function runAutonomousStep(): Promise<{ success: boolean; message: 
       if (resp.ok) {
         const data = await resp.json();
         plannedActions = data.actions || [];
-        console.log('[SentryAgent] Received action plan from remote reasoner:', plannedActions);
+        console.log('[SpideyAgent] Received action plan from remote reasoner:', plannedActions);
       }
     } catch (netErr) {
-      console.log('[SentryAgent] Central server offline; executing purely via Local System 1 Decision Engine.');
+      console.log('[SpideyAgent] Central server offline; executing purely via Local System 1 Decision Engine.');
       if (localDecision) {
         plannedActions = [localDecision.action];
       }
@@ -634,7 +718,27 @@ export function restoreOriginalDOM(clearVault: boolean = true): void {
   // A. Rollback DOM Form Input Elements & Selections
   for (const [, item] of trackedElements.entries()) {
     if ('value' in item.element) {
-      (item.element as HTMLInputElement).value = item.originalValue;
+      const el = item.element as HTMLInputElement | HTMLTextAreaElement;
+      
+      // Use native setter to bypass React's property override and force state sync
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+      
+      try {
+        if (el.tagName.toLowerCase() === 'textarea' && nativeTextAreaValueSetter) {
+          nativeTextAreaValueSetter.call(el, item.originalValue);
+        } else if (el.tagName.toLowerCase() === 'input' && (el as HTMLInputElement).type !== 'file' && nativeInputValueSetter) {
+          nativeInputValueSetter.call(el, item.originalValue);
+        } else if ((el as HTMLInputElement).type !== 'file') {
+          el.value = item.originalValue;
+        }
+        
+        // Dispatch events so React/Vue/Angular state managers catch the restoration
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      } catch (err) {
+        console.warn('[SpideyAgent] Could not cleanly restore value for element', el, err);
+      }
     }
     if (item.originalChecked !== undefined && 'checked' in item.element) {
       (item.element as HTMLInputElement).checked = item.originalChecked;
@@ -656,6 +760,13 @@ export function restoreOriginalDOM(clearVault: boolean = true): void {
     }
   }
 
+  // A.5. Global Cleanup: Ensure absolutely NO orphaned Sentry UI artifacts remain (fixes React wrapper issues)
+  document.querySelectorAll('.sentry-redacted-field, .sentry-static-redacted, .sentry-file-input-redacted, .sentry-redacted-image, .sentry-redacted-canvas').forEach(el => {
+    el.classList.remove('sentry-redacted-field', 'sentry-static-redacted', 'sentry-file-input-redacted', 'sentry-redacted-image', 'sentry-redacted-canvas');
+    el.removeAttribute('data-sentry-redacted');
+  });
+  document.querySelectorAll('.sentry-redacted-file-badge').forEach(badge => badge.remove());
+
   // B. Rollback Canvas Pixel Redactions to pristine unredacted state
   for (const [canvas, info] of trackedCanvases.entries()) {
     try {
@@ -664,7 +775,7 @@ export function restoreOriginalDOM(clearVault: boolean = true): void {
         ctx.putImageData(info.originalImageData, 0, 0);
       }
     } catch (err) {
-      console.warn('[SentryAgent] Could not restore canvas pixels:', err);
+      console.warn('[SpideyAgent] Could not restore canvas pixels:', err);
     }
     canvas.removeAttribute('data-sentry-redacted');
     canvas.classList.remove('sentry-redacted-canvas');
@@ -706,13 +817,13 @@ export function restoreOriginalDOM(clearVault: boolean = true): void {
   }
   trackedElements.clear();
   trackedCanvases.clear();
-  console.log(`[SentryAgent] Rolled back DOM and Canvases to pristine state (clearVault=${clearVault}).`);
+  console.log(`[SpideyAgent] Rolled back DOM and Canvases to pristine state (clearVault=${clearVault}).`);
 }
 
 // 5. Intercept form submissions to ensure safe local re-hydration
 document.addEventListener('submit', () => {
   if (!isCurrentlySanitized) return;
-  console.log('[SentryAgent] Intercepted form submit: Re-hydrating sensitive values locally from vault...');
+  console.log('[SpideyAgent] Intercepted form submit: Re-hydrating sensitive values locally from vault...');
   for (const item of trackedElements.values()) {
     if ('value' in item.element) {
       const input = item.element as HTMLInputElement;
@@ -724,10 +835,10 @@ document.addEventListener('submit', () => {
 }, true);
 
 function injectSentryStyles() {
-  if (document.getElementById('sentry-agent-styles')) return;
+  if (document.getElementById('spidey-agent-styles')) return;
 
   const style = document.createElement('style');
-  style.id = 'sentry-agent-styles';
+  style.id = 'spidey-agent-styles';
   style.textContent = `
     .sentry-redacted-field, .sentry-static-redacted {
       background-color: #070b14 !important;
@@ -787,7 +898,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({ success: true, report });
       })
       .catch((err) => {
-        console.error('[SentryAgent] SCAN_AND_SANITIZE error:', err);
+        console.error('[SpideyAgent] SCAN_AND_SANITIZE error:', err);
         sendResponse({ success: false, error: err?.message || String(err) });
       });
     return true; // Keep message channel open for async response
@@ -816,7 +927,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse(res);
       })
       .catch((err) => {
-        console.error('[SentryAgent] RUN_AUTONOMOUS_STEP error:', err);
+        console.error('[SpideyAgent] RUN_AUTONOMOUS_STEP error:', err);
         sendResponse({ success: false, message: err?.message || String(err) });
       });
     return true; // Keep message channel open for async response
@@ -825,25 +936,33 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   // Multi-Hop Service Worker Orchestration Messages
   if (message.type === 'EXTRACT_AND_SEAL') {
     (async () => {
-      const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas');
-      const requestedLevel = message.disclosureLevel || 'AUTO';
-      const activeLevel = determineDisclosureLevel(canvases.length, requestedLevel);
+      try {
+        const canvases = document.querySelectorAll<HTMLCanvasElement>('canvas');
+        const requestedLevel = message.disclosureLevel || 'AUTO';
+        const activeLevel = determineDisclosureLevel(canvases.length, requestedLevel);
 
-      const scanReport = await scanAndSanitizePage(activeLevel);
-      const sceneNodes = buildOpaqueSceneGraph();
-      const knownRealValues: string[] = Array.from(trackedElements.values()).map(t => t.originalValue);
-      const sealResult = await egressVerifierInstance.verifyAndSealPayload(
-        sceneNodes,
-        knownRealValues,
-        activeLevel,
-        scanReport.visualDetectionsCount
-      );
-      sendResponse({
-        success: sealResult.success,
-        wirePayload: sealResult.payload,
-        scanReport,
-        error: sealResult.error
-      });
+        const scanReport = await scanAndSanitizePage(activeLevel);
+        const sceneNodes = buildOpaqueSceneGraph();
+        const knownRealValues: string[] = Array.from(trackedElements.values()).map(t => t.originalValue);
+        const sealResult = await egressVerifierInstance.verifyAndSealPayload(
+          sceneNodes,
+          knownRealValues,
+          activeLevel,
+          scanReport.visualDetectionsCount
+        );
+        sendResponse({
+          success: sealResult.success,
+          wirePayload: sealResult.payload,
+          scanReport,
+          error: sealResult.error
+        });
+      } catch (err: any) {
+        console.warn('[SpideyAgent] EXTRACT_AND_SEAL error:', err);
+        sendResponse({
+          success: false,
+          error: err?.message || String(err)
+        });
+      }
     })();
     return true;
   }
@@ -868,7 +987,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse(res);
       })
       .catch((err) => {
-        console.error('[SentryAgent] RUN_DETERMINISTIC_COMMAND error:', err);
+        console.error('[SpideyAgent] RUN_DETERMINISTIC_COMMAND error:', err);
         sendResponse({ success: false, message: err?.message || String(err), latencyMs: 0 });
       });
     return true;
@@ -976,4 +1095,4 @@ sentrySpotlightInstance.registerCallbacks({
   }
 });
 
-console.log('[SentryAgent] Content Script v2 (Dual-Track + Spotlight HUD + Zero-AI Navigator) loaded on', window.location.href);
+console.log('[SpideyAgent] Content Script v2 (Dual-Track + Spotlight HUD + Zero-AI Navigator) loaded on', window.location.href);

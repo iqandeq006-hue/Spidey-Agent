@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "spidey-browser": {
+      "command": "python",
+      "args": [
+        "-u",
+        "server/mcp_server.py"
+      ]
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "sentry-agent-extension",
+  "name": "spidey-agent-extension",
   "version": "1.0.0",
   "description": "On-Device Privacy-Preserving Browser Agent for SIH26171 (ISRO)",
   "type": "module",
@@ -7,7 +7,7 @@
     "setup:models": "node ../scripts/download_models.mjs",
     "prebuild": "npm run setup:models",
     "dev": "vite build --watch",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && vite build --config vite.config.content.ts",
     "test": "node --test ../testbed/automated-tests/privacy.test.mjs",
     "test:e2e": "node --test ../testbed/automated-tests/e2e-plan.test.mjs",
     "test:all": "node --test ../testbed/automated-tests/privacy.test.mjs ../testbed/automated-tests/e2e-plan.test.mjs"

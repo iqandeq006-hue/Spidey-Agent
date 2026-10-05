@@ -8,13 +8,11 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        popup: resolve(__dirname, 'src/popup/popup.html'),
-        content: resolve(__dirname, 'src/content/content.ts'),
-        background: resolve(__dirname, 'src/background/background.ts'),
+        popup: resolve(__dirname, 'src/frontend/popup/popup.html'),
+        background: resolve(__dirname, 'src/backend/background/background.ts'),
       },
       output: {
         entryFileNames: (chunkInfo) => {
-          if (chunkInfo.name === 'content') return 'content.js';
           if (chunkInfo.name === 'background') return 'background.js';
           return 'assets/[name]-[hash].js';
         },
@@ -24,18 +22,6 @@ export default defineConfig({
     }
   },
   plugins: [
-    {
-      name: 'remove-import-meta-for-content-script',
-      renderChunk(code, chunk) {
-        if (chunk.fileName === 'content.js') {
-          return code.replaceAll(
-            'import.meta.url',
-            '(typeof chrome !== "undefined" && chrome.runtime?.getURL ? chrome.runtime.getURL("") : window.location.href)'
-          );
-        }
-        return null;
-      }
-    },
     {
       name: 'copy-manifest-icons-and-wasm',
       closeBundle() {

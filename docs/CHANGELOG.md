@@ -1,7 +1,7 @@
-# SentryAgent — System Changelog & Technical Deliverables
+# SpideyAgent — System Changelog & Technical Deliverables
 
 **Problem Statement:** ISRO — On-device Visual Perception for Light-weight Browser Agents (SIH26171)  
-**Project Name:** SentryAgent  
+**Project Name:** SpideyAgent  
 **Architecture Pattern:** Dual-Track Perception & Local Safety Boundary (Trustworthy Local-Remote Hybrid)  
 **Release Version:** v2.5.1 (Critical Fix: Dynamic Disclosure Ladder Escalation & Canvas Vision Integration Suite)  
 **Date of Release:** 23 September 2026  
@@ -39,7 +39,7 @@
 
 ## 1. Executive Summary & Honest System Boundary
 
-SentryAgent is an on-device, zero-data-egress browser automation and privacy preservation system built for the SIH26171 evaluation rubric:
+SpideyAgent is an on-device, zero-data-egress browser automation and privacy preservation system built for the SIH26171 evaluation rubric:
 1. **Visual context extraction accuracy (25%)** — Real on-device ONNX neural networks (`onnxruntime-web` with `blazeface.onnx` and `ocr-det.onnx`) running via WebGPU / WASM.
 2. **Recall & precision of PII/sensitive-data detection (20%)** — Checksum-validated detection (Verhoeff algorithm for Aadhaar, Luhn for cards, Indian PAN entity character validation, GSTIN format).
 3. **Precision of redaction (20%)** — **Multi-Region Connected-Component Labeling (CCL)** on DBNet probability maps preventing over-blacking between separated text clusters; verified graph-decoded bounding boxes for facial biometrics; DOM data-source semantic tokenization (`<AADHAAR_ID_1>`).
@@ -177,7 +177,7 @@ Automated browser subagent navigated `http://localhost:8080/` and verified full 
 
 ### Automated Unit Test Suite Execution
 ```text
-> sentry-agent-extension@1.0.0 test
+> spidey-agent-extension@1.0.0 test
 > node --test tests/privacy.test.mjs
 
 ✔ Verhoeff Checksum: Validates genuine Aadhaar numbers (0.9938ms)
@@ -196,7 +196,7 @@ Execution Duration: 93.5 ms
 
 ### Production Bundling Record
 ```text
-> sentry-agent-extension@1.0.0 build
+> spidey-agent-extension@1.0.0 build
 > tsc && vite build
 
 dist/manifest.json                                   0.91 kB
@@ -250,7 +250,7 @@ Built in 887 ms (Zero TypeScript / bundling warnings)
 
 ### Production Bundling Record (v2.5.0)
 ```text
-> sentry-agent-extension@1.0.0 test
+> spidey-agent-extension@1.0.0 test
 ✔ Verhoeff Checksum: Validates genuine Aadhaar numbers (1.28ms)
 ✔ Luhn Checksum: Correctly identifies valid and invalid payment cards (0.33ms)
 ✔ PAN Validator: Enforces 10-char format and valid entity character (0.27ms)

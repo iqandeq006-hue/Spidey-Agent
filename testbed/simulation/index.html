@@ -309,7 +309,7 @@
             <h3 class="card-title">1. Classified Satellite Payload & Multi-Spectral Imagery Preview</h3>
             <span class="badge badge-warning text-xs">DBNet Text-Region Target (Multi-Cluster CCL)</span>
           </div>
-          <p class="text-muted text-sm mb-2">Simulates live optical downlink with sensitive coordinate stamps and mission callsigns rendered into canvas pixels. SentryAgent's DBNet Connected-Component Labeling must extract separate, tight bounding boxes for each text cluster, preserving intermediate satellite imagery.</p>
+          <p class="text-muted text-sm mb-2">Simulates live optical downlink with sensitive coordinate stamps and mission callsigns rendered into canvas pixels. SpideyAgent's DBNet Connected-Component Labeling must extract separate, tight bounding boxes for each text cluster, preserving intermediate satellite imagery.</p>
           <div class="satellite-canvas-container">
             <canvas id="satellite-telemetry-canvas" width="600" height="220"></canvas>
           </div>
@@ -421,10 +421,10 @@
           </div>
         </div>
         <div class="telemetry-notice">
-          <strong>How to test SentryAgent:</strong>
+          <strong>How to test SpideyAgent:</strong>
           <ol>
             <li>Load the unpacked extension in Chrome from <code>extension/dist</code>.</li>
-            <li>Open the SentryAgent popup and click <strong>"Scan & Protect Tab"</strong>.</li>
+            <li>Open the SpideyAgent popup and click <strong>"Scan & Protect Tab"</strong>.</li>
             <li>Watch all sensitive fields transform into <code>&lt;PERSON_1&gt;</code>, <code>&lt;AADHAAR_ID_1&gt;</code>, <code>&lt;CONFIDENTIAL_VAL_1&gt;</code> directly in-DOM.</li>
             <li>Click <strong>"Submit Official Tender Bid"</strong> to watch the local Inversion Vault safely rehydrate the real data immediately before execution.</li>
           </ol>

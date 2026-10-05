@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Merchant Express Checkout</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 24px; max-width: 600px; margin: 0 auto; border: 1px solid #334155; }
+    .field { margin-bottom: 16px; }
+    label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; }
+    .val { font-size: 15px; font-weight: 600; color: #38bdf8; }
+    input { width: 100%; padding: 8px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 6px; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Merchant Gateway Order Checkout</h2>
+    <p style="color: #94a3b8; font-size: 13px; margin-bottom: 20px;">Review your transaction details and payment credentials.</p>
+
+    <div class="field">
+      <label>Customer Name</label>
+      <div class="val">Rohan Mehta</div>
+    </div>
+    <div class="field">
+      <label>Billing Address</label>
+      <div class="val">Flat 402, Satellite Tower, MG Road, Bengaluru 560001</div>
+    </div>
+    <div class="field">
+      <label>Contact Phone & Email</label>
+      <div class="val">9845012345 | rohan.mehta@outlook.com</div>
+    </div>
+    <div class="field">
+      <label>Seller GSTIN</label>
+      <div class="val">27AAAPA1234A1ZT</div>
+    </div>
+    <div class="field">
+      <label>Primary UPI VPA</label>
+      <div class="val">rohan.mehta@okhdfcbank</div>
+    </div>
+    <div class="field">
+      <label>Merchant Pay VPA</label>
+      <div class="val">payments@paytm</div>
+    </div>
+    <div class="field">
+      <label>Credit Card Number (Visa Luhn)</label>
+      <div class="val">4532015112830366</div>
+    </div>
+    <div class="field">
+      <label>Card Expiry</label>
+      <div class="val">11/28</div>
+    </div>
+    <div class="field">
+      <label>Card Security Code (CVV)</label>
+      <input type="password" value="892" name="cvv" id="card_cvv">
+    </div>
+  </div>
+</body>
+</html>

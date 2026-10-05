@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * SentryAgent Model Verification & Setup Script
+ * SpideyAgent Model Verification & Setup Script
  * Ensures all required on-device ONNX models exist before building or running.
  */
 
@@ -27,7 +27,7 @@ const REQUIRED_MODELS = [
 ];
 
 console.log('='.repeat(65));
-console.log(' SentryAgent On-Device Neural Vision Model Verifier');
+console.log(' SpideyAgent On-Device Neural Vision Model Verifier');
 console.log('='.repeat(65));
 console.log(`Checking models directory: ${MODELS_DIR}\n`);
 
@@ -76,7 +76,7 @@ if (omniMissing) {
       console.log('\n[INFO] To generate OmniParser manually, run:');
       console.log('  1. pip install -r scripts/requirements-models.txt');
       console.log('  2. python scripts/export_omniparser.py\n');
-      console.log('Note: SentryAgent includes built-in heuristic fallbacks if OmniParser ONNX is absent.');
+      console.log('Note: SpideyAgent includes built-in heuristic fallbacks if OmniParser ONNX is absent.');
       process.exit(0);
     }
   });

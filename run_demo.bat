@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo =====================================================================
-echo  SENTRYAGENT -- 1-CLICK DEMO LAUNCHER (ISRO SIH26171)
+echo  SPIDEYAGENT -- 1-CLICK DEMO LAUNCHER (ISRO SIH26171)
 echo  Privacy-Preserving On-Device Autonomous Browser Agent
 echo =====================================================================
 echo.

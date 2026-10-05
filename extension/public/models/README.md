@@ -1,4 +1,4 @@
-# SentryAgent On-Device Neural Vision Models
+# SpideyAgent On-Device Neural Vision Models
 
 This directory contains the compiled, standalone ONNX neural network models executed on-device inside the user's browser via `onnxruntime-web` (WebGPU execution provider with WASM SIMD fallback). Zero bytes of raw pixels or frames ever egress from the device.
 
@@ -17,7 +17,7 @@ This directory contains the compiled, standalone ONNX neural network models exec
     $$\begin{bmatrix} x_{min} & y_{min} & x_{max} & y_{max} \end{bmatrix}$$
   - Graph Features: Anchor decoding and Non-Maximum Suppression (NMS) baked directly into graph nodes.
 - **Secondary Post-Processing:** Secondary IoU NMS (threshold = 0.35) applied in TypeScript to eliminate multi-scale anchor overlap.
-- **Role in SentryAgent:** Detects faces on employee badges, passport scans, and ID avatar canvases. Triggers in-place pixel burning of solid blackout blocks.
+- **Role in SpideyAgent:** Detects faces on employee badges, passport scans, and ID avatar canvases. Triggers in-place pixel burning of solid blackout blocks.
 
 ---
 
@@ -37,7 +37,7 @@ This directory contains the compiled, standalone ONNX neural network models exec
 - **Multi-Region Connected-Component Labeling (CCL):**
   - Uses an 8-connectivity Breadth-First Search (BFS) over active pixels ($>0.35$ confidence, minimum cluster size $\ge 8$ pixels).
   - Tightly segments **isolated text clusters** into individual bounding boxes (e.g. separating a signature on the left from a date on the right), preserving the unredacted whitespace in between.
-- **Role in SentryAgent:** Localizes non-DOM text regions (digital signature pads, scanned blueprints, stamped document canvases).
+- **Role in SpideyAgent:** Localizes non-DOM text regions (digital signature pads, scanned blueprints, stamped document canvases).
 
 ---
 
@@ -50,7 +50,7 @@ This directory contains the compiled, standalone ONNX neural network models exec
 - **License:** Apache 2.0 (Permissive Open-Source)
 - **Architecture:** YOLOS (You Only Look at One Sequence, Fang et al. / Hugging Face Transformers)
 - **Runtime:** `onnxruntime-web` (WebGPU execution provider with WASM SIMD fallback)
-- **Role in SentryAgent:** Directly fulfills ISRO's Problem Statement specification for on-device Vision Transformer (ViT) visual context extraction.
+- **Role in SpideyAgent:** Directly fulfills ISRO's Problem Statement specification for on-device Vision Transformer (ViT) visual context extraction.
 
 ---
 
@@ -68,7 +68,7 @@ This directory contains the compiled, standalone ONNX neural network models exec
   - Output Name: `'output0'`
   - Tensor Shape: `Float32Array[1, 5, 8400]` (8,400 anchor predictions: $[cx, cy, w, h, icon\_confidence]$)
 - **Post-Processing:** IoU Non-Maximum Suppression (NMS threshold = 0.35, confidence $\ge 0.25$)
-- **Role in SentryAgent:** Detects interactable UI icons, buttons, search bars, and controls on opaque `<canvas>` dashboards (e.g. ISRO satellite telemetry) and unlabeled icon buttons.
+- **Role in SpideyAgent:** Detects interactable UI icons, buttons, search bars, and controls on opaque `<canvas>` dashboards (e.g. ISRO satellite telemetry) and unlabeled icon buttons.
 
 ---
 

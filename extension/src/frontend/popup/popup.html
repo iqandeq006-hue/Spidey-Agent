@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpideyAgent</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Clean Minimalist Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <img src="/icons/logo.png" alt="SpideyAgent" class="brand-logo-img" />
+        </div>
+        <div class="brand-text">
+          <div class="brand-title-row">
+            <span class="brand-name">SpideyAgent</span>
+            <span class="mcp-badge" title="Model Context Protocol Active">
+              <span class="mcp-dot"></span> MCP
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Segmented Navigation: Chat vs Logs (Ultra-compact) -->
+      <nav class="nav-segmented">
+        <button class="nav-tab active" id="tab-btn-chat" data-tab="chat">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span>Chat</span>
+        </button>
+        <button class="nav-tab" id="tab-btn-logs" data-tab="logs">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          <span>Logs</span>
+          <span id="log-count-badge" class="nav-badge">0</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- TAB 1: Conversational Chat Interface -->
+    <main class="pane active" id="pane-chat">
+      <div class="chat-container" id="chat-stream">
+        <!-- Welcoming Initial State (Minimalist Glassmorphic Spider Theme) -->
+        <div class="welcome-box" id="welcome-box">
+          <div class="welcome-emblem">
+            <img src="/icons/logo.png" alt="SpideyAgent" class="welcome-spider-img" />
+          </div>
+          <h2 class="welcome-title">SpideyAgent</h2>
+          <p class="welcome-subtitle">On-device privacy firewall & browser co-pilot</p>
+          
+          <!-- Minimal Quick Command Chips -->
+          <div class="cmd-chips">
+            <button class="cmd-chip" data-cmd="/protect" title="Redact sensitive data on this page">
+              <span class="chip-cmd">/protect</span>
+              <span class="chip-label">Protect page</span>
+            </button>
+            <button class="cmd-chip" data-cmd="/search " title="Search Google for any topic">
+              <span class="chip-cmd">/search</span>
+              <span class="chip-label">Web search</span>
+            </button>
+            <button class="cmd-chip" data-cmd="/nav " title="Navigate to a website or URL">
+              <span class="chip-cmd">/nav</span>
+              <span class="chip-label">Open site</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Clean Floating Chat Input Bar with Slash Command Palette -->
+      <footer class="chat-dock">
+        <!-- Floating Slash Command Palette -->
+        <div class="slash-palette" id="slash-palette" style="display: none;">
+          <div class="slash-item active" data-cmd="/protect">
+            <span class="slash-badge">/protect</span>
+            <span class="slash-desc">Protect sensitive PII on-device (Zero-Egress)</span>
+          </div>
+          <div class="slash-item" data-cmd="/search ">
+            <span class="slash-badge">/search</span>
+            <span class="slash-desc">Search Google / web for topics</span>
+          </div>
+          <div class="slash-item" data-cmd="/nav ">
+            <span class="slash-badge">/nav</span>
+            <span class="slash-desc">Open a website or direct URL</span>
+          </div>
+          <div class="slash-item" data-cmd="/restore">
+            <span class="slash-badge">/restore</span>
+            <span class="slash-desc">Restore original unredacted webpage</span>
+          </div>
+        </div>
+
+        <!-- Attached Snapshot Bar (appears after /protect) -->
+        <div class="attached-snapshot-bar" id="attached-snapshot-bar" style="display: none;">
+          <div class="attached-snapshot-info">
+            <img id="attached-snapshot-thumb" src="" class="attached-thumb" alt="Protected Snapshot" />
+            <div class="attached-text">
+              <span class="attached-title">📸 Protected Snapshot Attached</span>
+              <span class="attached-sub">Zero-PII verified · Ready for query</span>
+            </div>
+          </div>
+          <button type="button" class="btn-detach-snapshot" id="btn-detach-snapshot" title="Detach snapshot">✕</button>
+        </div>
+
+        <form id="chat-form" class="input-form">
+          <button type="button" id="btn-gallery-trigger" class="btn-gallery" title="Screenshot History & Downloads" aria-label="Screenshots">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+          <input 
+            type="text" 
+            id="chat-input" 
+            placeholder="Type a message or / for commands..." 
+            autocomplete="off" 
+            spellcheck="false"
+          />
+          <button type="submit" id="btn-chat-send" title="Send" aria-label="Send message">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </form>
+      </footer>
+    </main>
+
+    <!-- TAB 2: Dedicated Log Space (Telemetry, Activity, and Security Audit) -->
+    <section class="pane" id="pane-logs" style="display: none;">
+      <!-- Log Controls Bar -->
+      <div class="logs-toolbar">
+        <div class="log-filters">
+          <button class="filter-btn active" data-filter="ALL">All</button>
+          <button class="filter-btn" data-filter="NAVIGATOR">Nav</button>
+          <button class="filter-btn" data-filter="EXECUTION">Actions</button>
+          <button class="filter-btn" data-filter="SECURITY">Security</button>
+        </div>
+        <div class="log-actions">
+          <button class="action-icon-btn" id="btn-export-logs" title="Export audit log JSON">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          <button class="action-icon-btn" id="btn-clear-logs" title="Clear logs">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18m-2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Logs Scroll Area -->
+      <div class="logs-scroll" id="log-list">
+        <div class="empty-state">No logs recorded yet. Use the Chat to perform navigation or actions.</div>
+      </div>
+
+      <!-- Clean Collapsible Vault Summary in Log Space -->
+      <div class="vault-panel" id="vault-panel">
+        <div class="vault-summary-header" id="vault-toggle">
+          <div class="vault-title-group">
+            <span class="vault-icon">🔐</span>
+            <span>Local Vault</span>
+          </div>
+          <span class="vault-count-badge" id="vault-count-badge">0 protected</span>
+        </div>
+        <div class="vault-drawer" id="vault-drawer" style="display: none;">
+          <div class="vault-list" id="vault-list">
+            <div class="empty-vault-text">No sensitive data currently vaulted on this page.</div>
+          </div>
+          <!-- Redaction Proof Screenshot in Vault -->
+          <div class="vault-proof-section" id="vault-proof-section" style="display: none;">
+            <div class="proof-section-header">
+              <span>📸 Redacted Page Visual Proof:</span>
+            </div>
+            <div class="proof-preview-wrapper" id="vault-proof-wrapper">
+              <img id="vault-proof-img" class="vault-proof-img" src="" alt="Redacted Proof" />
+              <div class="proof-overlay-tag">🔍 Click to Expand</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Visual Proof Lightbox Modal -->
+    <div id="proof-modal" class="proof-modal" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-text">
+            <span>🕷️ Redacted Page Visual Proof (On-Device Verified)</span>
+          </div>
+          <button id="btn-close-modal" class="modal-close-btn" title="Close preview">&times;</button>
+        </div>
+        <div class="modal-body">
+          <img id="modal-proof-img" class="modal-proof-img" src="" alt="Redacted Proof Full" />
+        </div>
+      </div>
+    <!-- Human-in-the-Loop Confirmation Overlay -->
+    <div id="hitl-overlay" class="hitl-overlay" style="display: none;">
+      <div class="hitl-modal">
+        <div class="hitl-header">
+          <div class="hitl-icon-box">⚠️</div>
+          <div>
+            <div class="hitl-tag">HUMAN-IN-THE-LOOP SAFETY GATE</div>
+            <div class="hitl-title">Authorization Required</div>
+          </div>
+        </div>
+        <div class="hitl-body">
+          <div class="hitl-info-row">
+            <span class="hitl-label">Target Action:</span>
+            <span class="hitl-val-action" id="hitl-action-val">CLICK</span>
+          </div>
+          <div class="hitl-info-row">
+            <span class="hitl-label">Target Element:</span>
+            <span class="hitl-val-target" id="hitl-target-val">Submit Payment</span>
+          </div>
+          <div class="hitl-info-row">
+            <span class="hitl-label">Risk Level:</span>
+            <span class="hitl-badge-risk" id="hitl-risk-val">TIER_4 (Financial / Mutation)</span>
+          </div>
+          <div class="hitl-rationale" id="hitl-rationale-val">
+            Action initiates persistent financial transaction or form submission.
+          </div>
+          <div class="hitl-zero-egress">
+            🔒 <strong>Zero-Egress Active:</strong> Real credentials will only be unmasked locally on this device after your explicit authorization.
+          </div>
+        </div>
+        <div class="hitl-footer">
+          <button type="button" class="btn-hitl-abort" id="btn-hitl-abort">✕ Deny / Abort</button>
+          <button type="button" class="btn-hitl-authorize" id="btn-hitl-authorize">✓ Authorize & Execute</button>
+        </div>
+      </div>
+    <!-- Screenshot History & Downloader Modal -->
+    <div id="gallery-modal" class="gallery-modal" style="display: none;">
+      <div class="gallery-card">
+        <div class="gallery-header">
+          <div class="gallery-title-box">
+            <span class="gallery-icon">📸</span>
+            <div>
+              <div class="gallery-title">Screenshot Proof History</div>
+              <div class="gallery-subtitle">Download or inspect on-device visual proofs</div>
+            </div>
+          </div>
+          <button type="button" class="btn-close-gallery" id="btn-close-gallery">✕</button>
+        </div>
+        <div class="gallery-body" id="gallery-list">
+          <!-- Dynamically populated entries -->
+        </div>
+        <div class="gallery-footer">
+          <button type="button" class="btn-gallery-clear" id="btn-clear-gallery">Clear History</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="popup.ts"></script>
+</body>
+</html>

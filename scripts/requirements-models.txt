@@ -1,4 +1,4 @@
-# SentryAgent On-Device Vision Model Dependencies
+# SpideyAgent On-Device Vision Model Dependencies
 # Install via: pip install -r scripts/requirements-models.txt
 
 ultralytics>=8.3.0
